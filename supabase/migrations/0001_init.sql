@@ -38,6 +38,16 @@ alter table public.profiles enable row level security;
 alter table public.slots enable row level security;
 alter table public.bookings enable row level security;
 
+-- Table privileges: explicit so correctness does not depend on a project's
+-- default grants (hosted and local differ). Nobody gets delete; anon gets nothing.
+revoke all on public.profiles, public.slots, public.bookings from anon, authenticated;
+
+grant select on public.profiles to authenticated;
+-- Column-level: users may edit only their name and phone, never their role.
+grant update (full_name, phone) on public.profiles to authenticated;
+grant select on public.slots to authenticated;
+grant select, insert, update on public.bookings to authenticated;
+
 -- profiles: a user reads and updates only their own row.
 create policy "profiles_select_own" on public.profiles
   for select to authenticated
