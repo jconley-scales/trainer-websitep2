@@ -15,7 +15,9 @@ create table public.slots (
   trainer_id uuid not null references public.profiles (id),
   location text,
   created_at timestamptz not null default now(),
-  check (ends_at > starts_at)
+  check (ends_at > starts_at),
+  -- One slot per trainer per start time; also makes seeding idempotent.
+  unique (trainer_id, starts_at)
 );
 
 create table public.bookings (
