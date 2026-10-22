@@ -296,3 +296,23 @@ test("a failed booking request keeps the screen, shows an error in the dialog an
   await expect(dialog.getByRole("button", { name: "No, go back" })).toBeFocused();
   await expect(page).toHaveURL(/\/book$/);
 });
+
+test("?error= shows the matching message for a real reason and nothing for crafted input", async ({ page, request }) => {
+  await createSlots(request);
+  await signIn(page, request);
+
+  // A real reason shows its plain-language message.
+  await page.goto("/book?error=past");
+  await expect(page.locator("p.error-message")).toHaveText(
+    "Sorry, that time has already started. Please choose another.",
+  );
+
+  // Inherited Object properties must not be treated as reasons (used to crash the page with a 500).
+  for (const crafted of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
+    const response = await page.goto(`/book?error=${crafted}`);
+    expect(response!.status(), crafted).toBe(200);
+    await expect(page.getByRole("heading", { level: 1, name: "Book a session" })).toBeVisible();
+    await expect(page.getByRole("region", { name: WED })).toBeVisible();
+    await expect(page.locator("p.error-message"), crafted).toHaveCount(0);
+  }
+});

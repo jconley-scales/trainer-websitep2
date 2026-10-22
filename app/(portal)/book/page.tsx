@@ -84,7 +84,12 @@ async function OpenSlots({ searchParams }: { searchParams: SearchParams }) {
     });
   }
 
-  const message = typeof error === "string" ? BOOK_ERRORS[error] : undefined;
+  // `error` is untrusted query input: only own keys count, so "constructor",
+  // "toString", "__proto__" and the like never resolve to an inherited value.
+  const message =
+    typeof error === "string" && Object.hasOwn(BOOK_ERRORS, error)
+      ? BOOK_ERRORS[error]
+      : undefined;
 
   return (
     <>
