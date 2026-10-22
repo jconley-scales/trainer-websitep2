@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { NAV_LINKS, SITE } from "@/lib/site";
+import { NavLink } from "./NavLink";
 
 /** Public marketing navigation. Plain visible links (no hidden menu); wraps on phones. */
 export function SiteHeader() {
@@ -11,9 +12,9 @@ export function SiteHeader() {
         </Link>
         <nav className="nav-links" aria-label="Main">
           {NAV_LINKS.map((link) => (
-            <Link key={link.href} className="nav-link" href={link.href}>
+            <NavLink key={link.href} className="nav-link" href={link.href}>
               {link.label}
-            </Link>
+            </NavLink>
           ))}
           <Link className="nav-cta" href="/login">
             Client login

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { NAV_LINKS, SITE } from "@/lib/site";
+import { NavLink } from "./NavLink";
 
 export function SiteFooter() {
   return (
@@ -18,9 +19,9 @@ export function SiteFooter() {
           <ul className="footer-links">
             {NAV_LINKS.map((link) => (
               <li key={link.href}>
-                <Link className="nav-link" href={link.href}>
+                <NavLink className="nav-link" href={link.href}>
                   {link.label}
-                </Link>
+                </NavLink>
               </li>
             ))}
             <li>

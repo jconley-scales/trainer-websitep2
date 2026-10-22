@@ -277,7 +277,7 @@ test.describe("/ (public home page)", () => {
     await expectKeyboardAndTargets(page, "/ (home)");
   });
 
-  test("has one banner, one main, one h1, a skip link and a section per anchor", async ({ page }) => {
+  test("has one banner, one main, one h1, a skip link and a preview section linking to each page", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("main#main-content")).toHaveCount(1);
     await expect(page.locator("header")).toHaveCount(1);
@@ -285,8 +285,19 @@ test.describe("/ (public home page)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
     for (const id of ["services", "about", "testimonials", "contact"]) {
-      await expect(page.locator(`section#${id} h2`)).toHaveCount(1);
+      await expect(page.locator(`section[aria-labelledby="${id}-title"] h2`)).toHaveCount(1);
     }
+    const main = page.locator("main#main-content");
+    for (const [name, href] of [
+      ["See all services", "/services"],
+      ["Read more", "/about"],
+      ["More kind words", "/testimonials"],
+      ["Get in touch", "/contact"],
+    ]) {
+      await expect(main.getByRole("link", { name })).toHaveAttribute("href", href);
+    }
+    // The home page is a landing page: previews only, two quotes not three.
+    await expect(main.locator(".testimonial-card")).toHaveCount(2);
   });
 
   test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
@@ -301,13 +312,103 @@ test.describe("/ (public home page)", () => {
     await expectKeyboardAndTargets(page, "/ (home, 375px)");
   });
 
-  test("the nav links to the sections and the Client login button goes to /login", async ({ page }) => {
+  test("the nav links to the real pages and the Client login button goes to /login", async ({ page }) => {
     await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    for (const [name, href] of PUBLIC_NAV) {
+      await expect(nav.getByRole("link", { name })).toHaveAttribute("href", href);
+    }
+    await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
     await page.getByRole("banner").getByRole("link", { name: "Client login" }).click();
     await expect(page).toHaveURL(/\/login$/);
     // The sign-in page has a way back to the public site.
     await page.getByRole("banner").getByRole("link", { name: "Peak Form Training" }).click();
     await expect(page).toHaveURL(/\/$/);
+  });
+});
+
+const PUBLIC_NAV = [
+  ["Home", "/"],
+  ["About", "/about"],
+  ["Services", "/services"],
+  ["Testimonials", "/testimonials"],
+  ["Contact", "/contact"],
+] as const;
+
+const PUBLIC_PAGES = [
+  { path: "/about", nav: "About", h1: /^About /, title: /^About .+ \| Peak Form Training$/ },
+  { path: "/services", nav: "Services", h1: "Services and pricing", title: /^Services and pricing \| / },
+  { path: "/testimonials", nav: "Testimonials", h1: "Kind words from clients", title: /^Testimonials \| / },
+  { path: "/contact", nav: "Contact", h1: "Get in touch", title: /^Contact \| / },
+] as const;
+
+for (const { path, nav, h1, title } of PUBLIC_PAGES) {
+  test.describe(`${path} (public page)`, () => {
+    test("own h1 and title, landmarks, aria-current, axe, keyboard, 48px targets, focus", async ({ page }) => {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      await expect(page).toHaveTitle(title);
+      await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /\S/);
+      await expect(page.locator("main#main-content")).toHaveCount(1);
+      await expect(page.locator("header")).toHaveCount(1);
+      await expect(page.locator("footer")).toHaveCount(1);
+      await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
+      // The current page is marked in the header and footer navs, and only there.
+      const current = page.locator('[aria-current="page"]');
+      await expect(current).toHaveCount(2);
+      await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: nav })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await expectNoSeriousViolations(page, `${path}`);
+      await expectKeyboardAndTargets(page, `${path}`);
+    });
+
+    test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, "page must not scroll sideways").toBeLessThanOrEqual(0);
+      await expectNoSeriousViolations(page, `${path} (375px)`);
+      await expectKeyboardAndTargets(page, `${path} (375px)`);
+    });
+  });
+}
+
+test.describe("public page content and links", () => {
+  test("services lists every service and a free-consult call to action to /contact", async ({ page }) => {
+    await page.goto("/services");
+    await expect(page.locator(".feature-card")).toHaveCount(3);
+    await expect(page.getByRole("link", { name: "Book a free consult" }).first()).toHaveAttribute("href", "/contact");
+  });
+
+  test("testimonials shows all the quotes", async ({ page }) => {
+    await page.goto("/testimonials");
+    await expect(page.locator(".testimonial-card")).toHaveCount(3);
+  });
+
+  test("contact has real mailto and tel links and a form that composes a mailto (no backend)", async ({ page }) => {
+    await page.goto("/contact");
+    const main = page.locator("main#main-content");
+    await expect(main.getByRole("link", { name: /^Email / })).toHaveAttribute("href", /^mailto:[^?]+\?subject=/);
+    await expect(main.getByRole("link", { name: /^Call / })).toHaveAttribute("href", /^tel:\+?\d+$/);
+    await expect(main.getByLabel("Your name")).toBeVisible();
+    await expect(main.getByLabel("Your message")).toBeVisible();
+    // Submitting only hands a mailto: link to the email app: no request to any server,
+    // and the visitor stays on the page.
+    const posts: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() !== "GET") posts.push(r.url());
+    });
+    await main.getByLabel("Your name").fill("Pat Example");
+    await main.getByLabel("Your message").fill("I would like a free consultation.");
+    await main.getByRole("button", { name: "Open my email app" }).click();
+    await expect(page).toHaveURL(/\/contact$/);
+    expect(posts).toEqual([]);
   });
 });
 

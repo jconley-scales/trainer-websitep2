@@ -19,6 +19,8 @@ export const SITE = {
     "I started Peak Form Training because I believe it is never too late to feel strong. Most of my clients are new to exercise, or coming back to it after a long break, an injury or a busy few decades.",
     "Every session is one-to-one and paced for you. We begin with a relaxed chat about your health, your goals and anything you are worried about, and we build from there, one comfortable step at a time.",
   ],
+  contactIntro:
+    "Your first consultation is free. Tell me a little about yourself and what you would like to achieve, and there is no obligation at all.",
   philosophy:
     "Small, steady steps beat big, risky leaps. You will always know what we are doing and why, and you are always in charge of how hard we push.",
   services: [
@@ -65,8 +67,8 @@ export const SITE = {
 
 export const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "#about", label: "About" },
-  { href: "#services", label: "Services" },
-  { href: "#testimonials", label: "Testimonials" },
-  { href: "#contact", label: "Contact" },
+  { href: "/about", label: "About" },
+  { href: "/services", label: "Services" },
+  { href: "/testimonials", label: "Testimonials" },
+  { href: "/contact", label: "Contact" },
 ] as const;

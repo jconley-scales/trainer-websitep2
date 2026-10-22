@@ -12,6 +12,7 @@
   --color-text: #1a1a1a;
   --color-text-muted: #4a4a4a;
   --color-primary: #0b5394;
+  --color-primary-dark: #084074;
   --color-on-primary: #ffffff;
   --color-border: #767676;
   --color-focus: #b45309;
@@ -52,22 +53,23 @@ body {
   line-height: var(--line-height);
 }
 
-/* Single-column layout */
-.site-header,
+/* Portal and sign-in pages: a single comfortable column on a soft band of colour,
+   under the same header bar as the public site. */
+body:has(.site-main) {
+  background: var(--color-bg-alt);
+}
+
 .site-main {
   width: 100%;
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: var(--space);
+  padding: 2rem var(--space) 3rem;
 }
 
-.site-header {
-  border-bottom: 2px solid var(--color-border);
-}
-
-.site-title {
-  margin: 0;
-  font-size: var(--font-heading);
+.site-main h1 {
+  margin: 0 0 1rem;
+  font-size: 2rem;
+  line-height: 1.2;
 }
 
 h1,
@@ -108,13 +110,19 @@ button,
   min-height: var(--min-target);
   padding: 0.5rem 1.25rem;
   border: 2px solid var(--color-primary);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-on-primary);
   font-size: var(--font-large);
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+}
+
+button:hover:not(:disabled),
+.button:hover {
+  border-color: var(--color-primary-dark);
+  background: var(--color-primary-dark);
 }
 
 /* Checkboxes and radios: a comfortably large control (give it a label to tap). */
@@ -171,14 +179,24 @@ input[type="radio"] {
   font-weight: 600;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
   border: 2px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--color-bg);
   color: var(--color-text);
   font-size: var(--font-large);
+}
+
+.field input:hover,
+.field textarea:hover {
+  border-color: var(--color-primary);
+}
+
+.field textarea {
+  resize: vertical;
 }
 
 .field input[aria-invalid="true"] {
@@ -189,7 +207,8 @@ input[type="radio"] {
   margin: 0;
   padding: 0.75rem 1rem;
   border: 2px solid var(--color-error);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  background: var(--color-bg);
   color: var(--color-error);
   font-weight: 600;
 }
@@ -198,8 +217,18 @@ input[type="radio"] {
   margin: 0;
   padding: 0.75rem 1rem;
   border: 2px solid var(--color-primary);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  background: var(--color-bg);
   color: var(--color-text);
+}
+
+/* Sign-in card */
+.login {
+  padding: 1.5rem;
+  border: 1px solid #d9e2ec;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
 }
 
 .button-row {
@@ -214,6 +243,13 @@ input[type="radio"] {
   border-color: var(--color-primary);
 }
 
+button.button-secondary:hover:not(:disabled),
+.button.button-secondary:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-tint);
+  color: var(--color-primary-dark);
+}
+
 button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -223,6 +259,11 @@ button:disabled {
   border-color: var(--color-error);
   background: var(--color-error);
   color: var(--color-on-primary);
+}
+
+button.button-danger:hover:not(:disabled) {
+  border-color: #8a0019;
+  background: #8a0019;
 }
 
 /* Sessions home */
@@ -240,10 +281,12 @@ button:disabled {
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space);
-  padding: var(--space);
-  border: 2px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
+  padding: 1.5rem;
+  border: 1px solid #d9e2ec;
+  border-left: 6px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
 }
 
 .session-date,
@@ -275,6 +318,11 @@ button:disabled {
 }
 
 .empty-state {
+  padding: 1.5rem;
+  border: 1px solid #d9e2ec;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
   font-size: var(--font-large);
 }
 
@@ -283,9 +331,10 @@ button:disabled {
   width: calc(100% - 2 * var(--space));
   max-width: 32rem;
   padding: 1.5rem;
-  border: 3px solid var(--color-border);
-  border-radius: 12px;
+  border: 1px solid #d9e2ec;
+  border-radius: var(--radius-lg);
   background: var(--color-bg);
+  box-shadow: 0 12px 40px rgb(16 42 67 / 0.35);
   color: var(--color-text);
   font-size: var(--font-large);
 }
@@ -343,11 +392,17 @@ button:disabled {
   min-height: 4.5rem;
   padding: 0.75rem 1.25rem;
   border: 2px solid var(--color-primary);
-  border-radius: 12px;
-  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
   color: var(--color-text);
   text-align: left;
   font-weight: 400;
+}
+
+button.slot-row:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-bg-tint);
 }
 
 .slot-time {
@@ -443,9 +498,12 @@ button:disabled {
   color: var(--color-primary);
 }
 
-/* Sign-in and portal pages reuse the brand link as their only header content. */
-.site-header .nav-brand {
-  margin-left: -0.5rem;
+/* The current page is marked with more than colour: a thick accent underline. */
+.nav-link[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 6px;
 }
 
 /* Sections */
@@ -470,10 +528,19 @@ button:disabled {
   color: var(--color-text-muted);
 }
 
+.section-title--page {
+  font-size: 2.5rem;
+}
+
 .section-note {
   margin: 2rem 0 0;
   font-size: var(--font-large);
   font-weight: 600;
+}
+
+/* "See all ..." / "Read more" links under a section */
+.section-more {
+  margin: 2rem 0 0;
 }
 
 /* Hero */
@@ -520,7 +587,8 @@ button:disabled {
   color: var(--color-on-accent);
 }
 
-.button--accent:hover {
+.button--accent:hover,
+button.button--accent:hover:not(:disabled) {
   border-color: var(--color-accent-dark);
   background: var(--color-accent-dark);
 }
@@ -649,6 +717,26 @@ button:disabled {
   justify-content: center;
 }
 
+.contact-form {
+  max-width: 40rem;
+  margin-inline: auto;
+  padding: 2rem;
+  border: 1px solid #d9e2ec;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
+}
+
+.contact-form-title {
+  margin: 0;
+  font-size: var(--font-heading);
+}
+
+.contact-form-help {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
 /* Footer */
 .site-footer {
   padding-block: 3rem 1.5rem;
@@ -718,8 +806,17 @@ button:disabled {
     font-size: var(--font-large);
   }
 
-  .section-title {
+  .section-title,
+  .section-title--page {
     font-size: 1.75rem;
+  }
+
+  .contact-form {
+    padding: 1.25rem;
+  }
+
+  .site-main {
+    padding-block: 1.5rem 2.5rem;
   }
 
   .hero-actions .button {
