@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
 import { BrandHeader } from "@/components/BrandHeader";
+
+// The sign-in page and the signed-in portal are not for search engines.
+export const metadata: Metadata = { robots: { index: false } };
 
 export default function LoginLayout({
   children,

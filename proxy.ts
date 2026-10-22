@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { PROTECTED_PREFIXES } from "@/lib/portal-routes";
 
 /**
  * Route protection (Next.js 16 renamed `middleware` to `proxy`).
@@ -10,27 +11,39 @@ import { NextResponse, type NextRequest } from "next/server";
  * to /sessions. This is an optimistic gate and also refreshes the Supabase
  * session cookies; data access is still enforced by row level security.
  *
- * IMPORTANT: when adding a new portal route, add it to PROTECTED_PREFIXES, or
- * it will be public.
+ * The portal prefixes live in lib/portal-routes.ts (add new portal routes there).
  */
-const PROTECTED_PREFIXES = ["/sessions", "/book"];
+/** Decode each path segment on its own, so one malformed escape (%ZZ) cannot stop the others decoding. */
+function decodeSegments(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        return segment;
+      }
+    })
+    .join("/");
+}
 
 /**
- * Normalise a pathname the way the router will before matching, so an encoded
- * or oddly-cased spelling (e.g. /%73essions, //book) cannot slip past the check.
+ * Every spelling of the path the router might end up matching: as sent, decoded
+ * once, and decoded twice (a double-encoded /%2573essions is not routable today,
+ * but over-protecting is safe and under-protecting is not). Each is lower-cased
+ * with repeated slashes collapsed. The gate fails closed: any variant that is a
+ * portal path makes the request protected.
  */
-function normalisePath(pathname: string): string {
-  let path = pathname;
-  try {
-    path = decodeURIComponent(pathname);
-  } catch {
-    // Malformed escape: keep the raw path (still checked below).
-  }
-  return path.toLowerCase().replace(/\/{2,}/g, "/");
+function pathVariants(pathname: string): string[] {
+  const once = decodeSegments(pathname);
+  const twice = decodeSegments(once);
+  return [pathname, once, twice].map((p) =>
+    p.toLowerCase().replace(/\/{2,}/g, "/"),
+  );
 }
 
 function isProtectedPath(pathname: string): boolean {
-  return [pathname, normalisePath(pathname)].some((path) =>
+  return pathVariants(pathname).some((path) =>
     PROTECTED_PREFIXES.some(
       (prefix) => path === prefix || path.startsWith(`${prefix}/`),
     ),

@@ -744,3 +744,8 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* Public 404 */
+.not-found > * {
+  max-width: 40rem;
+}

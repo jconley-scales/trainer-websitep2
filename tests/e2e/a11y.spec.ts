@@ -193,6 +193,10 @@ type FocusStop = {
  */
 async function tabThrough(page: Page, maxStops = 30): Promise<FocusStop[]> {
   const stops: FocusStop[] = [];
+  // Clear markers from any earlier walk on this page so a second call works.
+  await page.evaluate(() =>
+    document.querySelectorAll("[data-tab-seen]").forEach((e) => e.removeAttribute("data-tab-seen")),
+  );
   for (let i = 0; i < maxStops; i++) {
     await page.keyboard.press("Tab");
     const stop = await page.evaluate(() => {
@@ -304,6 +308,21 @@ test.describe("/ (public home page)", () => {
     // The sign-in page has a way back to the public site.
     await page.getByRole("banner").getByRole("link", { name: "Peak Form Training" }).click();
     await expect(page).toHaveURL(/\/$/);
+  });
+});
+
+test.describe("public 404", () => {
+  test("an unknown public path shows the site chrome: landmarks, axe, keyboard, targets", async ({ page }) => {
+    const res = await page.goto("/medico");
+    expect(res?.status()).toBe(404);
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page.locator("main#main-content")).toHaveCount(1);
+    await expect(page.getByRole("banner")).toHaveCount(1);
+    await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to the home page" })).toBeVisible();
+    await expectNoSeriousViolations(page, "/medico (404)");
+    await expectKeyboardAndTargets(page, "/medico (404)");
   });
 });
 

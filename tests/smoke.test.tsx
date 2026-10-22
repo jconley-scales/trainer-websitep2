@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import MarketingLayout from "@/app/(marketing)/layout";
 import PortalLayout from "@/app/(portal)/layout";
+import LoginLayout from "@/app/login/layout";
 import RootLayout from "@/app/layout";
 import { SITE } from "@/lib/site";
 
@@ -17,17 +19,23 @@ function renderRoot() {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
-function renderPortal() {
+function renderWith(Layout: (props: { children: React.ReactNode }) => React.ReactNode) {
   const html = renderToStaticMarkup(
-    <PortalLayout>
+    <Layout>
       <p>Child content</p>
-    </PortalLayout>,
+    </Layout>,
   );
   return new DOMParser().parseFromString(html, "text/html");
 }
 
+const LAYOUTS = [
+  ["marketing", MarketingLayout],
+  ["login", LoginLayout],
+  ["portal", PortalLayout],
+] as const;
+
 function token(name: string): string {
-  const match = css.match(new RegExp(`${name}:\s*([^;]+);`));
+  const match = css.match(new RegExp(String.raw`${name}:\s*([^;]+);`));
   if (!match) throw new Error(`Missing CSS token ${name}`);
   return match[1].trim();
 }
@@ -54,20 +62,24 @@ describe("accessible base shell", () => {
     expect(doc.querySelector("main")).toBeNull();
   });
 
-  it("portal layout renders a header landmark with the brand and the page in main", () => {
-    const doc = renderPortal();
-    const header = doc.querySelector("header");
-    expect(header).not.toBeNull();
-    expect(header?.textContent).toContain(SITE.name);
-    expect(doc.querySelectorAll("main")).toHaveLength(1);
-    expect(doc.querySelector("main")?.textContent).toContain("Child content");
-  });
+  describe.each(LAYOUTS)("%s layout", (_name, Layout) => {
+    it("renders one banner header with the brand and the page in a single main", () => {
+      const doc = renderWith(Layout);
+      const header = doc.querySelector("header");
+      expect(header).not.toBeNull();
+      expect(header?.textContent).toContain(SITE.name);
+      expect(doc.querySelectorAll("header")).toHaveLength(1);
+      expect(doc.querySelectorAll("main")).toHaveLength(1);
+      expect(doc.querySelector("main")?.textContent).toContain("Child content");
+    });
 
-  it("portal layout offers a skip link that targets the main landmark", () => {
-    const doc = renderPortal();
-    const skip = doc.querySelector("a.skip-link");
-    expect(skip?.getAttribute("href")).toBe("#main-content");
-    expect(doc.querySelector("main")?.getAttribute("id")).toBe("main-content");
+    it("offers a skip link that targets the main landmark", () => {
+      const doc = renderWith(Layout);
+      const skip = doc.querySelectorAll("a.skip-link");
+      expect(skip).toHaveLength(1);
+      expect(skip[0].getAttribute("href")).toBe("#main-content");
+      expect(doc.querySelector("main")?.getAttribute("id")).toBe("main-content");
+    });
   });
 
   it("sets --font-base to at least 18px", () => {
@@ -84,5 +96,15 @@ describe("accessible base shell", () => {
     expect(contrast(token("--color-text-muted"), token("--color-bg"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token("--color-on-primary"), token("--color-primary"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token("--color-focus"), token("--color-bg"))).toBeGreaterThanOrEqual(3);
+  });
+
+  it("uses WCAG AA contrast for the marketing accent colours", () => {
+    const accent = token("--color-accent");
+    expect(contrast(accent, token("--color-bg"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(accent, token("--color-bg-alt"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("--color-on-accent"), accent)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("--color-on-accent"), token("--color-accent-dark"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("--color-primary"), token("--color-bg-alt"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("--color-text-muted"), token("--color-bg-alt"))).toBeGreaterThanOrEqual(4.5);
   });
 });

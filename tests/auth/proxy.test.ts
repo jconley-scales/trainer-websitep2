@@ -37,12 +37,25 @@ describe("proxy route guard", () => {
     "/%42ook",
     "/Sessions",
     "/book%2Fx",
+    "/%73essions/%ZZ",
+    "/%62ook/%E0%A4%A",
+    "/%2573essions",
+    "/%2562ook/x",
   ])("redirects %s to /login when signed out", async (path) => {
     getUser.mockResolvedValue({ data: { user: null } });
     const res = await proxy(request(path));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
   });
+
+  it.each(["/%ZZ", "/%E0%A4%A", "/%252e%252e/about", "/about/%ZZ"])(
+    "does not throw on malformed or double-encoded public path %s",
+    async (path) => {
+      const res = await proxy(request(path));
+      expect(res.status).toBe(200);
+      expect(createServerClient).not.toHaveBeenCalled();
+    },
+  );
 
   it("lets a signed-in user into the portal", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
