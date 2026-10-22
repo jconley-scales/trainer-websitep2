@@ -200,15 +200,12 @@ input[type="radio"] {
 .button-secondary {
   background: var(--color-bg);
   color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
-}
-
-.button-secondary {
-  border-color: var(--color-primary);
 }
 
 .button-danger {

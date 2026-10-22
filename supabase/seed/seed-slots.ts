@@ -77,7 +77,6 @@ export function generateSlots(
 
     for (let w = 0; w < weeks; w++) {
       const day = startDay + (offset + 7 * w) * DAY_MS;
-      if (day >= startDay + 7 * weeks * DAY_MS) continue;
       const startsAt = new Date(day + (hours * 60 + minutes) * 60 * 1000);
       const endsAt = new Date(startsAt.getTime() + entry.durationMin * 60 * 1000);
       slots.push({
