@@ -10,6 +10,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getTrainerNames } from "@/lib/trainers";
 import { cancelBookingAction } from "../actions";
 
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
 export const metadata: Metadata = {
   title: "Your sessions - Training Portal",
 };
@@ -19,7 +21,7 @@ export const metadata: Metadata = {
  * part of the static shell. Reading the session cookie is request-time work, so
  * the list streams in behind a Suspense boundary (required with cacheComponents).
  */
-export default function SessionsPage() {
+export default function SessionsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       <h1 id="sessions-heading" tabIndex={-1}>
@@ -31,17 +33,18 @@ export default function SessionsPage() {
         </Link>
       </p>
       <Suspense fallback={<p role="status">Loading your sessions...</p>}>
-        <SessionList />
+        <SessionList searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function SessionList() {
+async function SessionList({ searchParams }: { searchParams: SearchParams }) {
   // Everything below depends on the request (session cookie, current time), and
   // the Supabase client reads the clock internally, so opt into request-time
   // rendering explicitly instead of letting it trip the prerender check.
   await connection();
+  const { booked } = await searchParams;
   // The authenticated client: row level security limits everything to this user.
   const db = await createClient();
   const {
@@ -54,9 +57,20 @@ async function SessionList() {
     getTrainerNames(db),
   ]);
 
+  // The book screen sends the client here with ?booked=<slot id>. Only say it was
+  // booked if that slot really is one of their upcoming sessions (so a stale or
+  // made-up link never claims anything), and build the text from our own data.
+  const justBooked =
+    typeof booked === "string" ? sessions.find((s) => s.slot_id === booked) : undefined;
+
   return (
     <SessionsView
       cancelAction={cancelBookingAction}
+      bookedMessage={
+        justBooked
+          ? `Your session on ${formatDate(justBooked.starts_at)} at ${formatTime(justBooked.starts_at)} has been booked.`
+          : null
+      }
       sessions={sessions.map((s) => ({
         id: s.id,
         dateLabel: formatDate(s.starts_at),

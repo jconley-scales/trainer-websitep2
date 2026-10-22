@@ -16,6 +16,10 @@ type ConfirmDialogProps = {
   pending?: boolean;
   /** Shown inside the dialog if the action failed. */
   error?: string | null;
+  /** Label of the confirm button while `pending` (default "Cancelling..."). */
+  pendingLabel?: string;
+  /** "danger" (red, for destructive actions; default) or "primary". */
+  tone?: "danger" | "primary";
 };
 
 /**
@@ -35,6 +39,8 @@ export function ConfirmDialog({
   onCancel,
   pending = false,
   error = null,
+  pendingLabel = "Cancelling...",
+  tone = "danger",
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -50,6 +56,14 @@ export function ConfirmDialog({
     } else if (!open && dialog.open) {
       dialog.close();
     }
+    // Close on cleanup too. When the action behind the dialog navigates to another
+    // screen, the router keeps this one in the page, hidden, and tears down its
+    // effects instead of unmounting it. A modal dialog left open there would keep
+    // the whole document inert (nothing on the new screen could be focused or
+    // clicked), so it must not outlive the screen.
+    return () => {
+      if (dialog.open) dialog.close();
+    };
   }, [open]);
 
   // After a failure both buttons were disabled, so focus was lost: put it back
@@ -119,11 +133,11 @@ export function ConfirmDialog({
         </button>
         <button
           type="button"
-          className="button-danger"
+          className={tone === "danger" ? "button-danger" : undefined}
           onClick={onConfirm}
           disabled={pending}
         >
-          {pending ? "Cancelling..." : confirmLabel}
+          {pending ? pendingLabel : confirmLabel}
         </button>
       </div>
     </dialog>
