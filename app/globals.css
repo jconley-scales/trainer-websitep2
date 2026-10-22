@@ -69,14 +69,23 @@ a {
   color: var(--color-primary);
 }
 
-/* Interactive elements: at least 48px, clear focus ring */
+/* Interactive elements: at least 48px, clear focus ring.
+   min-height does nothing on an inline element, so links styled as buttons use
+   .button (inline-flex) and plain in-text links are left alone. Checkboxes and
+   radios are excluded from the blanket height so they are not stretched. */
 a,
 button,
 input,
 select,
 textarea {
-  min-height: var(--min-target);
   font: inherit;
+}
+
+button,
+select,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: var(--min-target);
 }
 
 button,
@@ -85,13 +94,23 @@ button,
   align-items: center;
   justify-content: center;
   min-width: var(--min-target);
+  min-height: var(--min-target);
   padding: 0.5rem 1.25rem;
   border: 2px solid var(--color-primary);
   border-radius: 8px;
   background: var(--color-primary);
   color: var(--color-on-primary);
   font-size: var(--font-large);
+  font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
+}
+
+/* Checkboxes and radios: a comfortably large control (give it a label to tap). */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 :focus-visible {
@@ -185,4 +204,91 @@ button,
 button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.button-secondary {
+  border-color: var(--color-primary);
+}
+
+.button-danger {
+  border-color: var(--color-error);
+  background: var(--color-error);
+  color: var(--color-on-primary);
+}
+
+/* Sessions home */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  margin: var(--space) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space);
+  padding: var(--space);
+  border: 2px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.session-date,
+.dialog-title {
+  margin: 0;
+  font-size: var(--font-heading);
+}
+
+.session-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: var(--font-large);
+}
+
+.session-details dt {
+  display: inline;
+  font-weight: 600;
+}
+
+.session-details dt::after {
+  content: ": ";
+}
+
+.session-details dd {
+  display: inline;
+  margin: 0;
+}
+
+.empty-state {
+  font-size: var(--font-large);
+}
+
+/* Confirmation dialog (native <dialog>, opened with showModal) */
+.dialog {
+  width: calc(100% - 2 * var(--space));
+  max-width: 32rem;
+  padding: 1.5rem;
+  border: 3px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-large);
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+
+.dialog-body p {
+  margin: var(--space) 0;
+}
+
+.dialog .error-message {
+  margin-bottom: var(--space);
 }
