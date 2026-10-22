@@ -121,3 +121,68 @@ button,
     transition: none !important;
   }
 }
+
+/* Forms (login) */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field label {
+  font-size: var(--font-large);
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-large);
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.error-message {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-error);
+  border-radius: 8px;
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.notice-message {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 8px;
+  color: var(--color-text);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+}
+
+.button-secondary {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}

@@ -244,6 +244,17 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# The portal signs in with a one-time CODE, so the emails must contain {{ .Token }}.
+# Existing users get the "magic_link" template; first-time users get "confirmation".
+# (Restart the local stack after editing; hosted projects: paste into Auth > Email Templates.)
+[auth.email.template.magic_link]
+subject = "Your Training Portal sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Your Training Portal sign-in code"
+content_path = "./supabase/templates/confirmation.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
