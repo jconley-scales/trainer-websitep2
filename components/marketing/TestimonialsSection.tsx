@@ -38,7 +38,7 @@ export function TestimonialsSection({
         {preview ? (
           <p className="section-more">
             <Link className="button button-secondary" href="/testimonials">
-              More kind words
+              More kind words<span className="visually-hidden"> from clients</span>
             </Link>
           </p>
         ) : null}

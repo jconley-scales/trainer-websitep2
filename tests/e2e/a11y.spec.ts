@@ -290,9 +290,9 @@ test.describe("/ (public home page)", () => {
     const main = page.locator("main#main-content");
     for (const [name, href] of [
       ["See all services", "/services"],
-      ["Read more", "/about"],
-      ["More kind words", "/testimonials"],
-      ["Get in touch", "/contact"],
+      ["Read more about Sarah", "/about"],
+      ["More kind words from clients", "/testimonials"],
+      ["Get in touch with Sarah", "/contact"],
     ]) {
       await expect(main.getByRole("link", { name })).toHaveAttribute("href", href);
     }
@@ -342,10 +342,18 @@ const PUBLIC_PAGES = [
   { path: "/contact", nav: "Contact", h1: "Get in touch", title: /^Contact \| / },
 ] as const;
 
+/** The contact form's submit button is disabled until the page has hydrated. */
+async function waitForInteractive(page: Page) {
+  for (const button of await page.getByRole("button", { name: "Open my email app" }).all()) {
+    await expect(button).toBeEnabled();
+  }
+}
+
 for (const { path, nav, h1, title } of PUBLIC_PAGES) {
   test.describe(`${path} (public page)`, () => {
     test("own h1 and title, landmarks, aria-current, axe, keyboard, 48px targets, focus", async ({ page }) => {
       await page.goto(path);
+      await waitForInteractive(page);
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
       await expect(page).toHaveTitle(title);
@@ -368,6 +376,7 @@ for (const { path, nav, h1, title } of PUBLIC_PAGES) {
     test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 812 });
       await page.goto(path);
+      await waitForInteractive(page);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -399,16 +408,35 @@ test.describe("public page content and links", () => {
     await expect(main.getByLabel("Your name")).toBeVisible();
     await expect(main.getByLabel("Your message")).toBeVisible();
     // Submitting only hands a mailto: link to the email app: no request to any server,
-    // and the visitor stays on the page.
-    const posts: string[] = [];
-    page.on("request", (r) => {
-      if (r.method() !== "GET") posts.push(r.url());
-    });
+    // nothing personal in any URL, and the visitor stays on the page.
+    const requests: { method: string; url: string }[] = [];
+    page.on("request", (r) => requests.push({ method: r.method(), url: r.url() }));
+    const submit = main.getByRole("button", { name: "Open my email app" });
+    await expect(submit).toBeEnabled();
     await main.getByLabel("Your name").fill("Pat Example");
+    await main.getByLabel("Your phone number (optional)").fill("555 0100");
     await main.getByLabel("Your message").fill("I would like a free consultation.");
-    await main.getByRole("button", { name: "Open my email app" }).click();
+    await submit.click();
     await expect(page).toHaveURL(/\/contact$/);
-    expect(posts).toEqual([]);
+    expect(requests.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(requests.filter((r) => r.url.includes("/contact?"))).toEqual([]);
+  });
+
+  test("without JavaScript the form cannot be submitted, so nothing personal reaches the URL", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL });
+    const page = await context.newPage();
+    const urls: string[] = [];
+    page.on("request", (r) => urls.push(r.url()));
+    await page.goto("/contact");
+    const main = page.locator("main#main-content");
+    await expect(main.getByRole("button", { name: "Open my email app" })).toBeDisabled();
+    await main.getByLabel("Your name").fill("Pat Example");
+    await main.getByLabel("Your message").fill("Private words");
+    await main.getByLabel("Your name").press("Enter"); // implicit submission must be blocked too
+    await expect(page).toHaveURL(/\/contact$/);
+    expect(urls.filter((u) => u.includes("/contact?") || u.includes("Pat"))).toEqual([]);
+    expect(await main.locator("form").getAttribute("method")).toBe("post");
+    await context.close();
   });
 });
 
@@ -574,6 +602,36 @@ test.describe("colour contrast of controls axe cannot fully judge", () => {
     await expect(dialog).toBeVisible();
     expect(await contrastRatio(dialog.getByRole("button", { name: "Yes, book this session" }))).toBeGreaterThanOrEqual(4.5);
     expect(await contrastRatio(dialog.locator("strong"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("buttons stay readable on hover: cancel, dialog and booking buttons keep AA contrast", async ({ page, request }) => {
+    await signInWithContent(page, request);
+    const cancel = page.getByRole("button", { name: /^Cancel this session/ });
+    await cancel.hover();
+    expect(await contrastRatio(cancel)).toBeGreaterThanOrEqual(4.5);
+    await cancel.click();
+    const dialog = page.getByRole("dialog", { name: "Cancel this session?" });
+    for (const name of ["No, keep my session", "Yes, cancel session"]) {
+      const button = dialog.getByRole("button", { name });
+      await button.hover();
+      expect(await contrastRatio(button), name).toBeGreaterThanOrEqual(4.5);
+    }
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("link", { name: "Book a session" }).hover();
+    expect(await contrastRatio(page.getByRole("link", { name: "Book a session" }))).toBeGreaterThanOrEqual(4.5);
+    await page.goto("/book");
+    const row = page.getByRole("button", { name: /Park Studio/ });
+    await row.hover();
+    expect(await contrastRatio(row.locator(".slot-time"))).toBeGreaterThanOrEqual(4.5);
+    expect(await contrastRatio(row.locator(".slot-detail"))).toBeGreaterThanOrEqual(4.5);
+    await row.click();
+    const booking = page.getByRole("dialog", { name: /^Book your session on/ });
+    for (const name of ["No, go back", "Yes, book this session"]) {
+      const button = booking.getByRole("button", { name });
+      await button.hover();
+      expect(await contrastRatio(button), name).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   test("error messages meet AA (4.5:1)", async ({ page }) => {

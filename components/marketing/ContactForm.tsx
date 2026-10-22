@@ -1,17 +1,35 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { buildMailto, composeContactBody } from "@/lib/contact";
 import { SITE } from "@/lib/site";
+
+const subscribe = () => () => {};
+
+/** False while the server renders and during hydration, true once the page is interactive. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
+}
 
 /**
  * A simple message form. There is no server: submitting composes a `mailto:`
  * link and opens the visitor's own email app with the message ready to send.
+ *
+ * Privacy: before the page is interactive the browser would submit the form
+ * natively, and a GET would put the visitor's name, phone number and message in
+ * the URL (and their history). So the form is `method="post"` (nothing in the
+ * URL even then) and the submit button stays disabled until hydration, which
+ * also blocks Enter-to-submit in the fields.
  */
 export function ContactForm() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
+  const hydrated = useHydrated();
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -30,6 +48,8 @@ export function ContactForm() {
   return (
     <form
       className="contact-form stack"
+      method="post"
+      action="#"
       onSubmit={handleSubmit}
       aria-labelledby="contact-form-title"
     >
@@ -74,7 +94,7 @@ export function ContactForm() {
           onChange={(e) => setMessage(e.target.value)}
         />
       </div>
-      <button type="submit" className="button--accent">
+      <button type="submit" className="button--accent" disabled={!hydrated}>
         Open my email app
       </button>
     </form>

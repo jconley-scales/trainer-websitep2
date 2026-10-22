@@ -37,7 +37,7 @@ export function AboutSection({
           {preview ? (
             <p className="section-more">
               <Link className="button button-secondary" href="/about">
-                Read more
+                Read more<span className="visually-hidden"> about {SITE.trainerFirstName}</span>
               </Link>
             </p>
           ) : (

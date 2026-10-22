@@ -28,7 +28,7 @@ export function ContactSection({
           <div className="hero-actions contact-actions">
             {preview ? (
               <Link className="button button--accent button--lg" href="/contact">
-                Get in touch
+                Get in touch<span className="visually-hidden"> with {SITE.trainerFirstName}</span>
               </Link>
             ) : (
               <a className="button button--accent button--lg" href={mailto}>
@@ -47,7 +47,7 @@ export function ContactSection({
         </div>
       </section>
       {preview ? null : (
-        <section className="section section--alt" aria-labelledby="contact-form-title">
+        <section className="section section--alt">
           <div className="wrap">
             <ContactForm />
           </div>
