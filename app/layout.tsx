@@ -1,29 +1,25 @@
 import type { Metadata } from "next";
+import { SITE } from "@/lib/site";
 import "./globals.css";
 
-export const PORTAL_NAME = "Training Portal";
-
 export const metadata: Metadata = {
-  title: PORTAL_NAME,
-  description: "Book and manage your workout sessions.",
+  title: {
+    default: `${SITE.name} | Personal training with ${SITE.trainer}`,
+    template: `%s | ${SITE.name}`,
+  },
+  description: SITE.description,
 };
 
+/**
+ * Root layout: document shell only. Each route group supplies its own chrome
+ * (skip link, header, <main>, footer) so the server renders the right one.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>
-        <a className="skip-link" href="#main-content">
-          Skip to main content
-        </a>
-        <header className="site-header">
-          <p className="site-title">{PORTAL_NAME}</p>
-        </header>
-        <main id="main-content" className="site-main">
-          {children}
-        </main>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

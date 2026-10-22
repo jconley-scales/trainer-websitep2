@@ -4,12 +4,49 @@ import { NextResponse, type NextRequest } from "next/server";
 /**
  * Route protection (Next.js 16 renamed `middleware` to `proxy`).
  *
- * Default-deny: every page except /login requires a signed-in user, which
- * covers the whole (portal) route group (route groups are not part of the URL).
- * This is an optimistic gate and also refreshes the Supabase session cookies;
- * data access is still enforced by row level security.
+ * Only the client portal is protected: /sessions and /book (and anything below
+ * them). Every other page is public marketing content and passes straight
+ * through, with no auth round-trip. /login additionally bounces signed-in users
+ * to /sessions. This is an optimistic gate and also refreshes the Supabase
+ * session cookies; data access is still enforced by row level security.
+ *
+ * IMPORTANT: when adding a new portal route, add it to PROTECTED_PREFIXES, or
+ * it will be public.
  */
+const PROTECTED_PREFIXES = ["/sessions", "/book"];
+
+/**
+ * Normalise a pathname the way the router will before matching, so an encoded
+ * or oddly-cased spelling (e.g. /%73essions, //book) cannot slip past the check.
+ */
+function normalisePath(pathname: string): string {
+  let path = pathname;
+  try {
+    path = decodeURIComponent(pathname);
+  } catch {
+    // Malformed escape: keep the raw path (still checked below).
+  }
+  return path.toLowerCase().replace(/\/{2,}/g, "/");
+}
+
+function isProtectedPath(pathname: string): boolean {
+  return [pathname, normalisePath(pathname)].some((path) =>
+    PROTECTED_PREFIXES.some(
+      (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+    ),
+  );
+}
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isLogin = pathname === "/login";
+  const isProtected = isProtectedPath(pathname);
+
+  // Public marketing page: no Supabase call.
+  if (!isLogin && !isProtected) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -38,10 +75,7 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-  const isLogin = pathname === "/login";
-
-  if (!user && !isLogin) {
+  if (!user && isProtected) {
     return redirectTo(request, "/login", response);
   }
   if (user && isLogin) {

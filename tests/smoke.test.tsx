@@ -2,15 +2,26 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import PortalLayout from "@/app/(portal)/layout";
 import RootLayout from "@/app/layout";
+import { SITE } from "@/lib/site";
 
 const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
 
-function renderLayout() {
+function renderRoot() {
   const html = renderToStaticMarkup(
     <RootLayout>
       <p>Child content</p>
     </RootLayout>,
+  );
+  return new DOMParser().parseFromString(html, "text/html");
+}
+
+function renderPortal() {
+  const html = renderToStaticMarkup(
+    <PortalLayout>
+      <p>Child content</p>
+    </PortalLayout>,
   );
   return new DOMParser().parseFromString(html, "text/html");
 }
@@ -35,17 +46,25 @@ function contrast(a: string, b: string): number {
 }
 
 describe("accessible base shell", () => {
-  it("renders a header landmark with the portal name and the page in main", () => {
-    const doc = renderLayout();
-    const header = doc.querySelector("header");
-    expect(header).not.toBeNull();
-    expect(header?.textContent).toContain("Training Portal");
-    expect(doc.querySelector("main")?.textContent).toContain("Child content");
+  it("root layout is the document shell: <html lang=en> wrapping the child", () => {
+    const doc = renderRoot();
     expect(doc.documentElement.getAttribute("lang")).toBe("en");
+    expect(doc.body.textContent).toContain("Child content");
+    // Chrome (header, skip link, main) belongs to the route-group layouts.
+    expect(doc.querySelector("main")).toBeNull();
   });
 
-  it("offers a skip link that targets the main landmark", () => {
-    const doc = renderLayout();
+  it("portal layout renders a header landmark with the brand and the page in main", () => {
+    const doc = renderPortal();
+    const header = doc.querySelector("header");
+    expect(header).not.toBeNull();
+    expect(header?.textContent).toContain(SITE.name);
+    expect(doc.querySelectorAll("main")).toHaveLength(1);
+    expect(doc.querySelector("main")?.textContent).toContain("Child content");
+  });
+
+  it("portal layout offers a skip link that targets the main landmark", () => {
+    const doc = renderPortal();
     const skip = doc.querySelector("a.skip-link");
     expect(skip?.getAttribute("href")).toBe("#main-content");
     expect(doc.querySelector("main")?.getAttribute("id")).toBe("main-content");

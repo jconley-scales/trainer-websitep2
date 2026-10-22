@@ -8,11 +8,17 @@ test("unauthenticated visit to /sessions redirects to /login", async ({ page }) 
   await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
 });
 
-test("paths ending in image-like letters (no dot) are still protected", async ({ page }) => {
-  for (const path of ["/medico", "/exportpng", "/ico", "/sessions/jpg"]) {
+test("the portal is protected, public pages are open", async ({ page }) => {
+  for (const path of ["/book", "/book/anything", "/sessions/jpg", "/%73essions"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/login$/);
   }
+  // Public: the home page and a path that does not exist (404, not a login redirect).
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.goto("/medico");
+  await expect(page).not.toHaveURL(/\/login/);
 });
 
 test("login page shows a large labeled email field, then the code step", async ({ page }) => {

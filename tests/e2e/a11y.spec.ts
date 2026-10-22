@@ -182,6 +182,8 @@ type FocusStop = {
   outlineWidth: number;
   outlineColor: string;
   boxShadow: string;
+  /** True when this exact element was already focused earlier in the walk. */
+  revisited: boolean;
 };
 
 /**
@@ -191,7 +193,6 @@ type FocusStop = {
  */
 async function tabThrough(page: Page, maxStops = 30): Promise<FocusStop[]> {
   const stops: FocusStop[] = [];
-  const seen = new Set<string>();
   for (let i = 0; i < maxStops; i++) {
     await page.keyboard.press("Tab");
     const stop = await page.evaluate(() => {
@@ -205,7 +206,12 @@ async function tabThrough(page: Page, maxStops = 30): Promise<FocusStop[]> {
         (el as HTMLInputElement).labels?.[0]?.textContent ||
         el.textContent?.replace(/\s+/g, " ").trim() ||
         el.tagName;
+      // Mark elements so wrap-around is detected by identity: labels can repeat
+      // (the home page has "Client login" in the nav, hero and footer).
+      const revisited = el.hasAttribute("data-tab-seen");
+      el.setAttribute("data-tab-seen", "");
       return {
+        revisited,
         label: `${el.tagName.toLowerCase()}: ${label}`,
         width: rect.width,
         height: rect.height,
@@ -217,8 +223,7 @@ async function tabThrough(page: Page, maxStops = 30): Promise<FocusStop[]> {
     });
     // Focus left the document (to the browser's own controls): the next Tab starts over.
     if (!stop) continue;
-    if (seen.has(stop.label)) break; // wrapped around
-    seen.add(stop.label);
+    if (stop.revisited) break; // wrapped around
     stops.push(stop);
   }
   return stops;
@@ -259,6 +264,48 @@ async function expectKeyboardAndTargets(page: Page, state: string) {
     expect(hasOutline || hasShadow, `${where} has a visible focus indicator`).toBe(true);
   }
 }
+
+test.describe("/ (public home page)", () => {
+  test("no serious axe violations, keyboard reachable, 48px targets, visible focus", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expectNoSeriousViolations(page, "/ (home)");
+    await expectKeyboardAndTargets(page, "/ (home)");
+  });
+
+  test("has one banner, one main, one h1, a skip link and a section per anchor", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("main#main-content")).toHaveCount(1);
+    await expect(page.locator("header")).toHaveCount(1);
+    await expect(page.locator("footer")).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
+    for (const id of ["services", "about", "testimonials", "contact"]) {
+      await expect(page.locator(`section#${id} h2`)).toHaveCount(1);
+    }
+  });
+
+  test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, "page must not scroll sideways").toBeLessThanOrEqual(0);
+    await expectNoSeriousViolations(page, "/ (home, 375px)");
+    await expectKeyboardAndTargets(page, "/ (home, 375px)");
+  });
+
+  test("the nav links to the sections and the Client login button goes to /login", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("banner").getByRole("link", { name: "Client login" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    // The sign-in page has a way back to the public site.
+    await page.getByRole("banner").getByRole("link", { name: "Peak Form Training" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+});
 
 test.describe("/login", () => {
   test("email step: no serious axe violations, keyboard reachable, 48px targets, visible focus", async ({ page }) => {
