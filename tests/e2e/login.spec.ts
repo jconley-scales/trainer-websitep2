@@ -8,6 +8,13 @@ test("unauthenticated visit to /sessions redirects to /login", async ({ page }) 
   await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
 });
 
+test("paths ending in image-like letters (no dot) are still protected", async ({ page }) => {
+  for (const path of ["/medico", "/exportpng", "/ico", "/sessions/jpg"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/login$/);
+  }
+});
+
 test("login page shows a large labeled email field, then the code step", async ({ page }) => {
   await page.goto("/login");
 

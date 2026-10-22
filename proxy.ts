@@ -58,8 +58,7 @@ function redirectTo(request: NextRequest, path: string, from: NextResponse) {
 }
 
 export const config = {
-  // Skip Next internals and static assets.
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
-  ],
+  // Skip only Next internals and the favicon. No file-extension exclusion on
+  // purpose: it is safer for the gate to over-protect than to be bypassable.
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico$).*)"],
 };

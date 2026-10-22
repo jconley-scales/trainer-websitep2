@@ -71,7 +71,7 @@ export async function verifyCode(
       { onConflict: "id", ignoreDuplicates: true },
     );
   if (profileError) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     return {
       ok: false,
       error: "We could not finish signing you in. Please try again in a moment.",

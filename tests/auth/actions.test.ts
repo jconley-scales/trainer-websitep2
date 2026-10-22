@@ -13,6 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { signInWithOtp, verifyOtp, signOut },
   })),
 }));
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({ from })),
 }));
@@ -112,6 +113,6 @@ describe("verifyCode", () => {
     upsert.mockResolvedValue({ error: { message: "db down" } });
     const result = await verifyCode("pat@example.com", "123456");
     expect(result.ok).toBe(false);
-    expect(signOut).toHaveBeenCalled();
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 });
