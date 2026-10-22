@@ -78,3 +78,31 @@ create policy "bookings_update_own" on public.bookings
   for update to authenticated
   using (client_id = (select auth.uid()))
   with check (client_id = (select auth.uid()));
+
+-- Availability without leaking who booked. A client cannot read other clients'
+-- bookings (RLS above), so "which slots are free?" cannot be derived from the
+-- bookings table on their side. This SECURITY DEFINER function reads bookings
+-- as its owner but returns only slot rows -- never any booking or client data.
+-- search_path is emptied and every reference is schema-qualified so the
+-- definer context cannot be hijacked by objects in a caller-controlled schema.
+create function public.available_slots(p_now timestamptz)
+returns setof public.slots
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.*
+  from public.slots s
+  where s.starts_at > p_now
+    and not exists (
+      select 1
+      from public.bookings b
+      where b.slot_id = s.id
+        and b.status = 'booked'
+    )
+  order by s.starts_at;
+$$;
+
+revoke all on function public.available_slots(timestamptz) from public, anon;
+grant execute on function public.available_slots(timestamptz) to authenticated;
