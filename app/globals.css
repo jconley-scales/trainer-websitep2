@@ -125,6 +125,7 @@ input[type="radio"] {
   z-index: 100;
   display: inline-flex;
   align-items: center;
+  min-height: var(--min-target);
   padding: 0.5rem 1rem;
   background: var(--color-primary);
   color: var(--color-on-primary);
