@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { SessionCard } from "@/components/SessionCard";
+import { SessionsView } from "@/components/SessionsView";
 import { listUpcomingSessions } from "@/lib/booking";
 import { formatDate, formatTime, formatTimeRange } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -54,31 +54,17 @@ async function SessionList() {
     getTrainerNames(db),
   ]);
 
-  if (sessions.length === 0) {
-    return (
-      <p className="empty-state">
-        You have no upcoming sessions. Choose &ldquo;Book a session&rdquo; to
-        pick a time.
-      </p>
-    );
-  }
-
   return (
-    <ul className="session-list" role="list">
-      {sessions.map((s) => (
-        <SessionCard
-          key={s.id}
-          cancelAction={cancelBookingAction}
-          session={{
-            id: s.id,
-            dateLabel: formatDate(s.starts_at),
-            timeLabel: formatTimeRange(s.starts_at, s.ends_at),
-            startLabel: formatTime(s.starts_at),
-            trainerName: trainerNames.get(s.trainer_id) ?? "Your trainer",
-            location: s.location ?? "Location to be announced",
-          }}
-        />
-      ))}
-    </ul>
+    <SessionsView
+      cancelAction={cancelBookingAction}
+      sessions={sessions.map((s) => ({
+        id: s.id,
+        dateLabel: formatDate(s.starts_at),
+        timeLabel: formatTimeRange(s.starts_at, s.ends_at),
+        startLabel: formatTime(s.starts_at),
+        trainerName: trainerNames.get(s.trainer_id) ?? "Your trainer",
+        location: s.location ?? "Location to be announced",
+      }))}
+    />
   );
 }

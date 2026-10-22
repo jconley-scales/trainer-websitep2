@@ -52,6 +52,12 @@ export function ConfirmDialog({
     }
   }, [open]);
 
+  // After a failure both buttons were disabled, so focus was lost: put it back
+  // on the safe button so keyboard users can retry or back out.
+  useEffect(() => {
+    if (open && error && !pending) cancelRef.current?.focus();
+  }, [open, error, pending]);
+
   function trapTab(event: KeyboardEvent<HTMLDialogElement>) {
     if (event.key !== "Tab") return;
     const focusable = Array.from(
@@ -81,6 +87,9 @@ export function ConfirmDialog({
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onKeyDown={trapTab}
+      // Keeps React state in sync if the browser closes the dialog itself
+      // (Chrome closes on a repeated Escape even while we are busy).
+      onClose={onCancel}
       onCancel={(event) => {
         // Escape. Let React state drive the close so it stays in sync.
         event.preventDefault();

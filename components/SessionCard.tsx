@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 export type SessionCardData = {
@@ -28,18 +28,6 @@ export function SessionCard({ session, cancelAction }: SessionCardProps) {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cancelled = useRef(false);
-
-  // When a cancelled session's card disappears, keyboard and screen reader users
-  // would otherwise lose their place. Move focus to the page heading, which
-  // announces where they are. (Cleanup runs after the card is removed, so the
-  // modal dialog is already gone and focus can move.)
-  useEffect(
-    () => () => {
-      if (cancelled.current) document.getElementById("sessions-heading")?.focus();
-    },
-    [],
-  );
 
   async function confirmCancel() {
     setPending(true);
@@ -49,9 +37,11 @@ export function SessionCard({ session, cancelAction }: SessionCardProps) {
     } catch {
       setError(CANCEL_FAILED);
       setPending(false);
+      // Reopen in case the dialog was closed (e.g. Escape) while we were working,
+      // so the error is never invisible.
+      setConfirming(true);
       return;
     }
-    cancelled.current = true;
     setPending(false);
     setConfirming(false);
   }

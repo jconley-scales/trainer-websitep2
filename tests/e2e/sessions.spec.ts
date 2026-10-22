@@ -183,12 +183,60 @@ test("Cancel asks for confirmation naming the date and time, and confirming remo
 
   await expect(dialog).toBeHidden();
   await expect(cards).toHaveCount(1);
-  await expect(page.getByText("Tuesday, March 5, 2030")).toHaveCount(0);
+  await expect(cards.filter({ hasText: "Tuesday, March 5, 2030" })).toHaveCount(0);
   await expect(cards.first()).toContainText("Thursday, March 7, 2030");
+
+  // A confirmation stays on screen, in a live region, naming what was cancelled.
+  const status = page.getByRole("status");
+  await expect(status).toHaveText("Your session on Tuesday, March 5, 2030 at 10:00 AM has been cancelled.");
+  // Focus is not lost with the removed card.
+  await expect(page.getByRole("heading", { level: 1, name: "Your upcoming sessions" })).toBeFocused();
 
   // The cancellation is real: it survives a reload.
   await page.reload();
   await expect(cards).toHaveCount(1);
+});
+
+test("cancelling the last session still explains what happened, above the empty state", async ({ page, request }) => {
+  await signInWithTwoBookings(page, request);
+
+  const cards = page.getByRole("listitem");
+  for (const expected of ["Tuesday, March 5, 2030", "Thursday, March 7, 2030"]) {
+    await expect(cards.first()).toContainText(expected);
+    await cards.first().getByRole("button", { name: /^Cancel this session/ }).click();
+    await page.getByRole("button", { name: "Yes, cancel session" }).click();
+    await expect(page.getByRole("status")).toHaveText(
+      new RegExp(`Your session on ${expected} at .* has been cancelled\\.`),
+    );
+  }
+  await expect(cards).toHaveCount(0);
+  await expect(page.getByText("You have no upcoming sessions")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Thursday, March 7, 2030");
+});
+
+test("a failed cancel keeps the card, shows an error, returns focus to a button and claims no success", async ({ page, request }) => {
+  await signInWithTwoBookings(page, request);
+
+  // Make the Server Action request fail at the network level.
+  await page.route("**/sessions", (route) =>
+    route.request().method() === "POST" ? route.abort() : route.continue(),
+  );
+
+  const cards = page.getByRole("listitem");
+  await cards.nth(0).getByRole("button", { name: /^Cancel this session/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Cancel this session?" });
+  await dialog.getByRole("button", { name: "Yes, cancel session" }).click();
+
+  await expect(dialog.getByRole("alert")).toContainText("could not cancel");
+  await expect(dialog.getByRole("button", { name: "No, keep my session" })).toBeFocused();
+  await expect(page.getByRole("status")).toHaveText("");
+  await expect(cards).toHaveCount(2);
+
+  // The dialog can still be dismissed and reopened afterwards.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await cards.nth(0).getByRole("button", { name: /^Cancel this session/ }).click();
+  await expect(dialog).toBeVisible();
 });
 
 test("the confirm dialog is keyboard friendly: focus stays inside, Escape keeps the session", async ({ page, request }) => {
