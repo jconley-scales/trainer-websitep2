@@ -6,7 +6,6 @@ export function Hero() {
   return (
     <section className="hero" aria-labelledby="hero-title">
       <div className="wrap hero-inner">
-        <p className="hero-eyebrow">{SITE.credentials}</p>
         <h1 id="hero-title" className="hero-title">
           Feel stronger, steadier and more confident
         </h1>
@@ -23,6 +22,7 @@ export function Hero() {
             Client login
           </Link>
         </div>
+        <p className="hero-credentials">{SITE.credentials}</p>
       </div>
     </section>
   );

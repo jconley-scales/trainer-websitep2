@@ -29,6 +29,11 @@
   --color-on-accent: #ffffff;
   --color-bg-alt: #f3f7fb;
   --color-bg-tint: #dcebf7;
+
+  /* Hero: a flat field of the brand green, white text (white on #0b4a33 ≈ 10:1). */
+  --color-hero: #0b4a33;
+  --color-on-hero: #ffffff;
+  --color-hero-lead: #d7ebe0; /* ≈10:1 on --color-hero */
   --shadow-card: 0 1px 2px rgb(16 42 67 / 0.08), 0 4px 16px rgb(16 42 67 / 0.08);
   --radius: 8px;
   --radius-lg: 16px;
@@ -517,8 +522,9 @@ button.slot-row:hover:not(:disabled) {
 
 .section-title {
   margin: 0 0 0.75rem;
-  font-size: 2rem;
-  line-height: 1.2;
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
 .section-intro {
@@ -543,41 +549,73 @@ button.slot-row:hover:not(:disabled) {
   margin: 2rem 0 0;
 }
 
-/* Hero */
+/* Hero: a flat field of brand green, one dominant display line reversed out. */
 .hero {
-  padding-block: 4.5rem 4rem;
-  background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%);
+  padding-block: 5.5rem 5rem;
+  background: var(--color-hero);
+  color: var(--color-on-hero);
 }
 
 .hero-inner > * {
-  max-width: 52rem;
-}
-
-.hero-eyebrow {
-  margin: 0 0 1rem;
-  color: var(--color-accent);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  max-width: 54rem;
 }
 
 .hero-title {
-  margin: 0 0 1.25rem;
-  font-size: 2.75rem;
-  line-height: 1.15;
+  margin: 0 0 1.5rem;
+  /* One very large size: the page's dominant type. */
+  font-size: clamp(2.6rem, 6vw, 4.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-on-hero);
 }
 
 .hero-lead {
-  max-width: 40rem;
-  margin: 0 0 2rem;
-  color: var(--color-text-muted);
-  font-size: 1.35rem;
+  max-width: 42rem;
+  margin: 0 0 2.25rem;
+  color: var(--color-hero-lead);
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  line-height: 1.5;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space);
+}
+
+.hero-credentials {
+  margin: 2rem 0 0;
+  color: var(--color-hero-lead);
+  font-size: var(--font-large);
+  font-weight: 600;
+}
+
+/* On the green field the accent button would vanish: invert to a white fill,
+   and make the secondary a plain outline in white. */
+.hero .button--accent,
+.hero .button--accent:hover {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--color-hero);
+}
+
+.hero .button--accent:hover {
+  background: var(--color-bg-tint);
+  border-color: var(--color-bg-tint);
+  color: var(--color-primary-dark);
+}
+
+.hero .button-secondary,
+.hero .button.button-secondary {
+  background: transparent;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.hero .button.button-secondary:hover {
+  background: rgb(255 255 255 / 0.14);
+  border-color: #ffffff;
+  color: #ffffff;
 }
 
 /* Buttons */
@@ -610,20 +648,23 @@ button.button--accent:hover:not(:disabled) {
   list-style: none;
 }
 
-.feature-card,
-.testimonial-card {
+/* Quotes get more air than panels, so the two sections do not read alike. */
+.feature-grid:has(.testimonial-card) {
+  gap: 2.5rem 3rem;
+}
+
+/* Service panels: a flat step in tone, no border or shadow. */
+.feature-card {
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
-  border: 1px solid #d9e2ec;
+  padding: 2rem;
   border-radius: var(--radius-lg);
-  background: var(--color-bg);
-  box-shadow: var(--shadow-card);
+  background: var(--color-surface);
 }
 
 .feature-card h3 {
   margin: 0 0 0.75rem;
-  font-size: var(--font-heading);
+  font-size: 1.6rem;
 }
 
 .feature-card p {
@@ -643,12 +684,18 @@ button.button--accent:hover:not(:disabled) {
   margin: 0;
 }
 
+.testimonial-card {
+  padding: 0.25rem 0;
+}
+
 .testimonial-card blockquote {
   flex: 1;
-  margin: 0 0 1rem;
-  padding: 0 0 0 1rem;
-  border-left: 4px solid var(--color-accent);
-  font-size: var(--font-large);
+  margin: 0 0 1.25rem;
+  padding: 0 0 0 1.5rem;
+  border-left: 5px solid var(--color-accent);
+  /* Statement size: large enough to read as a quote, under the headline rule. */
+  font-size: clamp(1.3rem, 1.8vw, 1.6rem);
+  line-height: 1.45;
 }
 
 .testimonial-card blockquote p {
@@ -658,7 +705,9 @@ button.button--accent:hover:not(:disabled) {
 .testimonial-card figcaption {
   display: flex;
   flex-direction: column;
+  padding-left: 1.5rem;
   color: var(--color-text-muted);
+  font-size: var(--font-large);
 }
 
 .testimonial-card figcaption strong {
@@ -673,22 +722,22 @@ button.button--accent:hover:not(:disabled) {
   align-items: center;
 }
 
+/* Monogram standing in for a real photo (flag: replace with a photo of Sarah). */
 .photo-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   width: 100%;
   border-radius: var(--radius-lg);
-  background: var(--color-bg-tint);
-  box-shadow: var(--shadow-card);
+  background: var(--color-hero);
 }
 
 .photo-initials {
-  color: var(--color-primary);
-  font-size: 4.5rem;
+  color: var(--color-on-hero);
+  font-size: 5rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
 .about-credentials {
