@@ -1,6 +1,7 @@
 "use server";
 
 import { availableDays } from "@/lib/booking-availability";
+import { findService } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -12,13 +13,15 @@ export type BookingInput = {
   email: string;
   phone: string;
   note: string;
+  /** One of the SITE.services ids. */
+  service: string;
   startsAt: string;
   endsAt: string;
 };
 
 /**
  * Save a public booking request. Reachable by direct POST, so it re-validates
- * everything: the contact fields, and that the chosen time is a real, still-open
+ * everything: the contact fields, that the service is one we offer, and that the chosen time is a real, still-open
  * slot (not an arbitrary time posted by hand). Writes with the anon client, so
  * row level security allows only the insert.
  */
@@ -40,6 +43,10 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
   if (note.length > 2000) {
     return { ok: false, error: "Please shorten your message a little." };
   }
+  const service = findService(input.service);
+  if (!service) {
+    return { ok: false, error: "Please choose which service you would like." };
+  }
 
   // The time must be one of the real, future slots we actually offer.
   const slot = availableDays(new Date())
@@ -55,6 +62,7 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
     email,
     phone: phone || null,
     note: note || null,
+    service: service.id,
     starts_at: slot.startsAt,
     ends_at: slot.endsAt,
   });
