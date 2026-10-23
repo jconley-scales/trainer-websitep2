@@ -90,6 +90,25 @@ function zonedParts(instant: Date): { weekday: number; year: number; month: numb
   };
 }
 
+/** How far ahead the booking page looks, for fetching which times are taken. */
+export function availabilityWindow(now: Date): { from: Date; to: Date } {
+  return { from: now, to: new Date(now.getTime() + (DAYS_AHEAD + 1) * 24 * 60 * 60 * 1000) };
+}
+
+/**
+ * Drop the slots that are already taken (by start instant), and any day left
+ * with no slots. `taken` holds epoch milliseconds, so ISO strings in different
+ * formats (".000Z" vs "+00:00") still compare equal.
+ */
+export function withoutTaken(days: AvailableDay[], taken: ReadonlySet<number>): AvailableDay[] {
+  return days
+    .map((day) => ({
+      ...day,
+      slots: day.slots.filter((slot) => !taken.has(Date.parse(slot.startsAt))),
+    }))
+    .filter((day) => day.slots.length > 0);
+}
+
 /**
  * The available days (with their slots) from `now` forward, future-only.
  * Pure given `now`, so it is deterministic and easy to test.

@@ -1,19 +1,9 @@
 "use client";
 
-import { useState, useSyncExternalStore, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { buildMailto, composeContactBody } from "@/lib/contact";
 import { SITE } from "@/lib/site";
-
-const subscribe = () => () => {};
-
-/** False while the server renders and during hydration, true once the page is interactive. */
-function useHydrated(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false,
-  );
-}
+import { useHydrated } from "@/lib/use-hydrated";
 
 /**
  * A simple message form. There is no server: submitting composes a `mailto:`

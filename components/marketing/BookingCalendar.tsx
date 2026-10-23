@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { submitBooking } from "@/app/(marketing)/book/actions";
-import { availableDays, type AvailableDay, type AvailableSlot } from "@/lib/booking-availability";
+import { getTakenTimes, submitBooking } from "@/app/(marketing)/book/actions";
+import {
+  availableDays,
+  withoutTaken,
+  type AvailableDay,
+  type AvailableSlot,
+} from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -29,6 +34,13 @@ function monthGrid(year: number, month: number): number[][] {
   return weeks;
 }
 
+/** Offered times minus the ones already booked. If the lookup fails, offer all
+ *  of them: the database still refuses a time that is taken. */
+async function loadAvailableDays(): Promise<AvailableDay[]> {
+  const taken = await getTakenTimes().catch(() => [] as number[]);
+  return withoutTaken(availableDays(new Date()), new Set(taken));
+}
+
 export function BookingCalendar() {
   // Availability is computed on the client (current time), so the page itself
   // stays static. The server action re-validates the chosen slot on submit.
@@ -42,13 +54,21 @@ export function BookingCalendar() {
   const [note, setNote] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
+  // Shown above the calendar when the chosen time was taken in the meantime.
+  const [takenNotice, setTakenNotice] = useState("");
 
   const headingId = useId();
   const slotsHeadingId = useId();
   const formHeadingId = useId();
 
   useEffect(() => {
-    setDays(availableDays(new Date()));
+    let cancelled = false;
+    loadAvailableDays().then((fresh) => {
+      if (!cancelled) setDays(fresh);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Same markup on the server and the first client paint, so no hydration clash.
@@ -105,6 +125,14 @@ export function BookingCalendar() {
     });
     if (result.ok) {
       setStep("success");
+    } else if (result.taken) {
+      // Someone else got there first: show the up-to-date times and say so.
+      const fresh = await loadAvailableDays();
+      setDays(fresh);
+      setSelectedSlot(null);
+      if (!fresh.some((day) => day.date === selectedDate)) setSelectedDate(null);
+      setStep("idle");
+      setTakenNotice(result.error);
     } else {
       setStep("error");
       setError(result.error);
@@ -113,6 +141,12 @@ export function BookingCalendar() {
 
   return (
     <div className="booking">
+      {takenNotice ? (
+        <p className="error-message" role="alert">
+          {takenNotice}
+        </p>
+      ) : null}
+
       {/* Step 1: pick a day */}
       <div className="booking-calendar">
         <div className="booking-month-bar">
@@ -210,6 +244,7 @@ export function BookingCalendar() {
                   onClick={() => {
                     setSelectedSlot(slot);
                     setStep("idle");
+                    setTakenNotice("");
                   }}
                 >
                   <span className="slot-time">{formatTimeRange(slot.startsAt, slot.endsAt)}</span>

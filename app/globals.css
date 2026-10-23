@@ -1123,3 +1123,89 @@ button,
 .booking-chosen {
   font-size: var(--font-large);
 }
+
+/* ==========================================================================
+   Trainer admin (/admin)
+   ========================================================================== */
+.admin-main {
+  max-width: 48rem;
+}
+
+.admin-tag {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.admin-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.admin-heading-row h1 {
+  margin: 0;
+}
+
+.admin-summary {
+  font-size: var(--font-large);
+}
+
+.admin-booking-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  width: 100%;
+}
+
+/* Status is spelled out in words; colour only reinforces it. */
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.status-badge--new {
+  background: #fff4d6;
+  color: #6b4a00;
+}
+
+.status-badge--confirmed {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.status-badge--cancelled {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.admin-booking--new {
+  border-left-color: #b7791f;
+}
+
+.admin-booking--cancelled {
+  border-left-color: var(--color-border);
+}
+
+.admin-note {
+  white-space: pre-wrap;
+}
+
+.admin-past {
+  margin-top: 2.5rem;
+}
+
+.admin-past summary {
+  min-height: var(--min-target);
+  display: flex;
+  align-items: center;
+  font-size: var(--font-large);
+  font-weight: 700;
+  cursor: pointer;
+}
