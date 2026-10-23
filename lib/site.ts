@@ -31,7 +31,7 @@ export const SITE = {
       price: "From $70 per session",
     },
     {
-      title: "Starter programme",
+      title: "Starter program",
       blurb:
         "New to exercise? Six sessions to learn the basics safely, build confidence and leave you with a simple routine you can keep up.",
       price: "From $390 for six sessions",
