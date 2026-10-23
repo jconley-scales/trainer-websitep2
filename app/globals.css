@@ -38,6 +38,12 @@
   --radius: 8px;
   --radius-lg: 16px;
   --site-width: 70rem;
+
+  /* Motion (tokens from the design study; used only under no-preference) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-press: 140ms;
+  --t-hover: 180ms;
 }
 
 *,
@@ -920,3 +926,80 @@ button.button--accent:hover:not(:disabled) {
 .not-found > * {
   max-width: 40rem;
 }
+
+/* ==========================================================================
+   Motion layer
+   Pure CSS, all under `prefers-reduced-motion: no-preference`, so reduced motion
+   (first-class for the 60+ audience) shows the finished static page with no
+   movement. Transform and opacity only, and nothing mutates server-rendered DOM,
+   so there is no hydration interaction: a hero/header load-rise and button
+   feedback. (A JS scroll-reveal was tried and removed — observing and mutating
+   sections raced React hydration.)
+   ========================================================================== */
+
+/* Feedback under the hand: a small, consistent press/hover on buttons. Colour
+   transitions are always on; the transform only under no-preference. */
+button,
+.button {
+  transition:
+    background-color var(--t-hover) ease,
+    border-color var(--t-hover) ease,
+    color var(--t-hover) ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .button {
+    transition:
+      background-color var(--t-hover) ease,
+      border-color var(--t-hover) ease,
+      color var(--t-hover) ease,
+      transform var(--t-press) var(--ease-out);
+  }
+
+  button:active:not(:disabled),
+  .button:active {
+    transform: translateY(1px);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    button:hover:not(:disabled),
+    .button:hover {
+      transform: translateY(-1px);
+    }
+  }
+
+  /* Signature load: the hero and each page header rise in, in reading order,
+     settled well under 1.2s. Pure CSS (no JS gate) — it always ends visible via
+     `both`, and reduced motion skips it. The band is painted at once; words rise. */
+  .hero-inner > *,
+  .page-header .wrap > * {
+    opacity: 0;
+    transform: translateY(14px);
+    animation: load-rise 600ms var(--ease-expo) both;
+  }
+
+  .hero-inner > *:nth-child(1),
+  .page-header .wrap > *:nth-child(1) {
+    animation-delay: 80ms;
+  }
+  .hero-inner > *:nth-child(2),
+  .page-header .wrap > *:nth-child(2) {
+    animation-delay: 190ms;
+  }
+  .hero-inner > *:nth-child(3) {
+    animation-delay: 300ms;
+  }
+  .hero-inner > *:nth-child(4) {
+    animation-delay: 410ms;
+  }
+
+}
+
+@keyframes load-rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
