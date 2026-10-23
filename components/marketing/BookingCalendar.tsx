@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { submitBooking } from "@/app/(marketing)/book/actions";
 import { availableDays, type AvailableDay, type AvailableSlot } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
+import { SITE, type ServiceId } from "@/lib/site";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
@@ -36,6 +37,8 @@ export function BookingCalendar() {
   const [monthIndex, setMonthIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+  // One-to-one is what every slot offered before services could be chosen.
+  const [serviceId, setServiceId] = useState<ServiceId>(SITE.services[0].id);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -65,12 +68,15 @@ export function BookingCalendar() {
     );
   }
 
+  const service = SITE.services.find((s) => s.id === serviceId) ?? SITE.services[0];
+
   if (step === "success" && selectedSlot) {
     return (
       <div className="booking-success" role="status">
         <h2 className="section-title">Thank you — your request is in</h2>
         <p>
-          You asked to book <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
+          You asked to book <strong>{service.title}</strong> on{" "}
+          <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
           <strong>{formatTimeRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>.
         </p>
         <p>
@@ -100,6 +106,7 @@ export function BookingCalendar() {
       email,
       phone,
       note,
+      service: service.id,
       startsAt: selectedSlot.startsAt,
       endsAt: selectedSlot.endsAt,
     });
@@ -194,12 +201,33 @@ export function BookingCalendar() {
         <p className="booking-hint">Days with an open session are shown in colour. Pick one to see its times.</p>
       </div>
 
-      {/* Step 2: pick a time */}
+      {/* Step 2: pick a service and a time */}
       {selectedDate && daySlots.length > 0 ? (
         <div className="booking-times" aria-labelledby={slotsHeadingId}>
           <h2 id={slotsHeadingId} className="section-title">
             Times on {formatDate(daySlots[0].startsAt)}
           </h2>
+          <fieldset className="service-options">
+            <legend>Which service would you like?</legend>
+            {SITE.services.map((option) => (
+              <label key={option.id} className="service-option">
+                <input
+                  type="radio"
+                  name="service"
+                  value={option.id}
+                  checked={serviceId === option.id}
+                  onChange={() => {
+                    setServiceId(option.id);
+                    if (step === "error") setStep("idle");
+                  }}
+                />
+                <span className="service-option-text">
+                  <span className="service-option-title">{option.title}</span>
+                  <span className="service-option-price">{option.price}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
           <ul className="slot-list">
             {daySlots.map((slot) => (
               <li key={slot.id}>
@@ -213,7 +241,7 @@ export function BookingCalendar() {
                   }}
                 >
                   <span className="slot-time">{formatTimeRange(slot.startsAt, slot.endsAt)}</span>
-                  <span className="slot-detail">60-minute one-to-one session</span>
+                  <span className="slot-detail">60 minutes · {service.title}</span>
                 </button>
               </li>
             ))}
@@ -228,7 +256,8 @@ export function BookingCalendar() {
             Your details
           </h2>
           <p className="booking-chosen">
-            Booking <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
+            Booking <strong>{service.title}</strong> on{" "}
+            <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
             <strong>{formatTimeRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>.
           </p>
 

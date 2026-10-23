@@ -23,20 +23,25 @@ export const SITE = {
     "Your first consultation is free. Tell me a little about yourself and what you would like to achieve, and there is no obligation at all.",
   philosophy:
     "Small, steady steps beat big, risky leaps. You will always know what we are doing and why, and you are always in charge of how hard we push.",
+  // Each `id` is saved with a booking request (booking_requests.service), so keep
+  // ids stable and in step with supabase/migrations/0005_booking_request_service.sql.
   services: [
     {
+      id: "one-to-one",
       title: "One-to-one training",
       blurb:
         "A private hour with me, planned around your body, your goals and your pace. Strength, balance and mobility, all with clear, patient coaching.",
       price: "From $70 per session",
     },
     {
+      id: "starter",
       title: "Starter programme",
       blurb:
         "New to exercise? Six sessions to learn the basics safely, build confidence and leave you with a simple routine you can keep up.",
       price: "From $390 for six sessions",
     },
     {
+      id: "small-group",
       title: "Small-group sessions",
       blurb:
         "Train with two or three friendly faces at a similar level. Good company, shared encouragement and a lower price per person.",
@@ -72,3 +77,10 @@ export const NAV_LINKS = [
   { href: "/testimonials", label: "Testimonials" },
   { href: "/contact", label: "Contact" },
 ] as const;
+
+export type ServiceId = (typeof SITE.services)[number]["id"];
+
+/** The service with this id, or undefined for anything else (e.g. a hand-made POST). */
+export function findService(id: unknown) {
+  return SITE.services.find((service) => service.id === id);
+}
