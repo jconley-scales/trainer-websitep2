@@ -11,6 +11,12 @@ export type SectionProps = {
   headingLevel?: "h1" | "h2";
   variant?: "preview" | "full";
   tone?: "default" | "alt";
+  /**
+   * True when the section is the body of a dedicated page whose <h1> and lead
+   * live in a <PageHeader> above it. The section then renders its content only
+   * (no title or intro of its own) and its region is labelled by that h1.
+   */
+  page?: boolean;
 };
 
 export function sectionClass(tone: SectionProps["tone"]): string {

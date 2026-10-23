@@ -13,18 +13,26 @@ export function ContactSection({
   headingLevel = "h2",
   variant = "full",
   tone = "default",
+  page = false,
 }: SectionProps) {
   const Heading = headingLevel;
   const preview = variant === "preview";
   const mailto = buildMailto({ to: SITE.email, subject: "Free consultation" });
   return (
     <>
-      <section className={sectionClass(tone)} aria-labelledby="contact-title">
+      <section
+        className={sectionClass(tone)}
+        aria-labelledby={page ? "page-title" : "contact-title"}
+      >
         <div className="wrap contact-box">
-          <Heading id="contact-title" className={titleClass(headingLevel)}>
-            {preview ? "Let’s have a chat" : "Get in touch"}
-          </Heading>
-          <p className="section-intro">{SITE.contactIntro}</p>
+          {page ? null : (
+            <>
+              <Heading id="contact-title" className={titleClass(headingLevel)}>
+                {preview ? "Let’s have a chat" : "Get in touch"}
+              </Heading>
+              <p className="section-intro">{SITE.contactIntro}</p>
+            </>
+          )}
           <div className="hero-actions contact-actions">
             {preview ? (
               <Link className="button button--accent button--lg" href="/contact">

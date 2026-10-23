@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AboutSection } from "@/components/marketing/AboutSection";
 import { ConsultCta } from "@/components/marketing/ConsultCta";
+import { PageHeader } from "@/components/marketing/PageHeader";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -11,7 +12,8 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <>
-      <AboutSection headingLevel="h1" />
+      <PageHeader title={`About ${SITE.trainerFirstName}`} lead={SITE.credentials} />
+      <AboutSection page />
       <ConsultCta />
     </>
   );

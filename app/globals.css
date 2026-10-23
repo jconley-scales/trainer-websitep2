@@ -29,10 +29,21 @@
   --color-on-accent: #ffffff;
   --color-bg-alt: #f3f7fb;
   --color-bg-tint: #dcebf7;
+
+  /* Hero: a flat field of the brand green, white text (white on #0b4a33 ≈ 10:1). */
+  --color-hero: #0b4a33;
+  --color-on-hero: #ffffff;
+  --color-hero-lead: #d7ebe0; /* ≈10:1 on --color-hero */
   --shadow-card: 0 1px 2px rgb(16 42 67 / 0.08), 0 4px 16px rgb(16 42 67 / 0.08);
   --radius: 8px;
   --radius-lg: 16px;
   --site-width: 70rem;
+
+  /* Motion (tokens from the design study; used only under no-preference) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-press: 140ms;
+  --t-hover: 180ms;
 }
 
 *,
@@ -517,8 +528,9 @@ button.slot-row:hover:not(:disabled) {
 
 .section-title {
   margin: 0 0 0.75rem;
-  font-size: 2rem;
-  line-height: 1.2;
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
 .section-intro {
@@ -543,41 +555,97 @@ button.slot-row:hover:not(:disabled) {
   margin: 2rem 0 0;
 }
 
-/* Hero */
+/* Hero: a flat field of brand green, one dominant display line reversed out. */
 .hero {
-  padding-block: 4.5rem 4rem;
-  background: linear-gradient(180deg, var(--color-bg-alt) 0%, var(--color-bg) 100%);
+  padding-block: 5.5rem 5rem;
+  background: var(--color-hero);
+  color: var(--color-on-hero);
 }
 
 .hero-inner > * {
-  max-width: 52rem;
-}
-
-.hero-eyebrow {
-  margin: 0 0 1rem;
-  color: var(--color-accent);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  max-width: 54rem;
 }
 
 .hero-title {
-  margin: 0 0 1.25rem;
-  font-size: 2.75rem;
-  line-height: 1.15;
+  margin: 0 0 1.5rem;
+  /* One very large size: the page's dominant type. */
+  font-size: clamp(2.6rem, 6vw, 4.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-on-hero);
 }
 
 .hero-lead {
-  max-width: 40rem;
-  margin: 0 0 2rem;
-  color: var(--color-text-muted);
-  font-size: 1.35rem;
+  max-width: 42rem;
+  margin: 0 0 2.25rem;
+  color: var(--color-hero-lead);
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  line-height: 1.5;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space);
+}
+
+.hero-credentials {
+  margin: 2rem 0 0;
+  color: var(--color-hero-lead);
+  font-size: var(--font-large);
+  font-weight: 600;
+}
+
+/* On the green field the accent button would vanish: invert to a white fill,
+   and make the secondary a plain outline in white. */
+.hero .button--accent,
+.hero .button--accent:hover {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--color-hero);
+}
+
+.hero .button--accent:hover {
+  background: var(--color-bg-tint);
+  border-color: var(--color-bg-tint);
+  color: var(--color-primary-dark);
+}
+
+.hero .button-secondary,
+.hero .button.button-secondary {
+  background: transparent;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.hero .button.button-secondary:hover {
+  background: rgb(255 255 255 / 0.14);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+/* Dedicated-page header: the same green field as the hero, carrying the page's
+   one h1 and a lead line, so the inner pages read as one site with the home. */
+.page-header {
+  padding-block: 4rem;
+  background: var(--color-hero);
+  color: var(--color-on-hero);
+}
+
+.page-header-title {
+  margin: 0;
+  font-size: clamp(2.3rem, 5vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-on-hero);
+}
+
+.page-header-lead {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: var(--color-hero-lead);
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
+  line-height: 1.5;
 }
 
 /* Buttons */
@@ -610,20 +678,23 @@ button.button--accent:hover:not(:disabled) {
   list-style: none;
 }
 
-.feature-card,
-.testimonial-card {
+/* Quotes get more air than panels, so the two sections do not read alike. */
+.feature-grid:has(.testimonial-card) {
+  gap: 2.5rem 3rem;
+}
+
+/* Service panels: a flat step in tone, no border or shadow. */
+.feature-card {
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
-  border: 1px solid #d9e2ec;
+  padding: 2rem;
   border-radius: var(--radius-lg);
-  background: var(--color-bg);
-  box-shadow: var(--shadow-card);
+  background: var(--color-surface);
 }
 
 .feature-card h3 {
   margin: 0 0 0.75rem;
-  font-size: var(--font-heading);
+  font-size: 1.6rem;
 }
 
 .feature-card p {
@@ -643,12 +714,18 @@ button.button--accent:hover:not(:disabled) {
   margin: 0;
 }
 
+.testimonial-card {
+  padding: 0.25rem 0;
+}
+
 .testimonial-card blockquote {
   flex: 1;
-  margin: 0 0 1rem;
-  padding: 0 0 0 1rem;
-  border-left: 4px solid var(--color-accent);
-  font-size: var(--font-large);
+  margin: 0 0 1.25rem;
+  padding: 0 0 0 1.5rem;
+  border-left: 5px solid var(--color-accent);
+  /* Statement size: large enough to read as a quote, under the headline rule. */
+  font-size: clamp(1.3rem, 1.8vw, 1.6rem);
+  line-height: 1.45;
 }
 
 .testimonial-card blockquote p {
@@ -658,7 +735,9 @@ button.button--accent:hover:not(:disabled) {
 .testimonial-card figcaption {
   display: flex;
   flex-direction: column;
+  padding-left: 1.5rem;
   color: var(--color-text-muted);
+  font-size: var(--font-large);
 }
 
 .testimonial-card figcaption strong {
@@ -673,22 +752,22 @@ button.button--accent:hover:not(:disabled) {
   align-items: center;
 }
 
+/* Monogram standing in for a real photo (flag: replace with a photo of Sarah). */
 .photo-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   width: 100%;
   border-radius: var(--radius-lg);
-  background: var(--color-bg-tint);
-  box-shadow: var(--shadow-card);
+  background: var(--color-hero);
 }
 
 .photo-initials {
-  color: var(--color-primary);
-  font-size: 4.5rem;
+  color: var(--color-on-hero);
+  font-size: 5rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
 .about-credentials {
@@ -794,7 +873,8 @@ button.button--accent:hover:not(:disabled) {
     padding-block: 2.5rem;
   }
 
-  .hero {
+  .hero,
+  .page-header {
     padding-block: 2.5rem;
   }
 
@@ -845,4 +925,287 @@ button.button--accent:hover:not(:disabled) {
 /* Public 404 */
 .not-found > * {
   max-width: 40rem;
+}
+
+/* ==========================================================================
+   Motion layer
+   Pure CSS, all under `prefers-reduced-motion: no-preference`, so reduced motion
+   (first-class for the 60+ audience) shows the finished static page with no
+   movement. Transform and opacity only, and nothing mutates server-rendered DOM,
+   so there is no hydration interaction: a hero/header load-rise and button
+   feedback. (A JS scroll-reveal was tried and removed — observing and mutating
+   sections raced React hydration.)
+   ========================================================================== */
+
+/* Feedback under the hand: a small, consistent press/hover on buttons. Colour
+   transitions are always on; the transform only under no-preference. */
+button,
+.button {
+  transition:
+    background-color var(--t-hover) ease,
+    border-color var(--t-hover) ease,
+    color var(--t-hover) ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .button {
+    transition:
+      background-color var(--t-hover) ease,
+      border-color var(--t-hover) ease,
+      color var(--t-hover) ease,
+      transform var(--t-press) var(--ease-out);
+  }
+
+  button:active:not(:disabled),
+  .button:active {
+    transform: translateY(1px);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    button:hover:not(:disabled),
+    .button:hover {
+      transform: translateY(-1px);
+    }
+  }
+
+  /* Signature load: the hero and each page header rise in, in reading order,
+     settled well under 1.2s. Pure CSS (no JS gate) — it always ends visible via
+     `both`, and reduced motion skips it. The band is painted at once; words rise. */
+  .hero-inner > *,
+  .page-header .wrap > * {
+    opacity: 0;
+    transform: translateY(14px);
+    animation: load-rise 600ms var(--ease-expo) both;
+  }
+
+  .hero-inner > *:nth-child(1),
+  .page-header .wrap > *:nth-child(1) {
+    animation-delay: 80ms;
+  }
+  .hero-inner > *:nth-child(2),
+  .page-header .wrap > *:nth-child(2) {
+    animation-delay: 190ms;
+  }
+  .hero-inner > *:nth-child(3) {
+    animation-delay: 300ms;
+  }
+  .hero-inner > *:nth-child(4) {
+    animation-delay: 410ms;
+  }
+
+}
+
+@keyframes load-rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Public booking (calendar -> times -> details)
+   ========================================================================== */
+.booking {
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
+  max-width: 40rem;
+}
+
+.booking-hint,
+.booking-empty {
+  margin: 0;
+  font-size: var(--font-large);
+  color: var(--color-text-muted);
+}
+
+.booking-empty a,
+.booking-success a {
+  color: var(--color-primary);
+}
+
+.booking-month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+  margin-bottom: 1rem;
+}
+
+.booking-month-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.booking-month-bar .button {
+  padding: 0 1rem;
+  font-size: 1.5rem;
+}
+
+.booking-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.booking-grid th {
+  padding: 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.booking-cell {
+  padding: 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.booking-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--radius);
+  font-size: var(--font-large);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.booking-day--off {
+  color: var(--color-text-muted);
+  opacity: 0.55;
+}
+
+/* Days with an open session: an accent-outlined, tappable button. */
+.booking-day--open {
+  border: 2px solid var(--color-accent);
+  background: var(--color-bg);
+  color: var(--color-accent-dark);
+  cursor: pointer;
+}
+
+.booking-day--open:hover {
+  background: var(--color-bg-tint);
+}
+
+.booking-day--open.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* Selected time row (reuses .slot-row); mark with more than colour via a check. */
+.slot-row.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.slot-row.is-selected .slot-time,
+.slot-row.is-selected .slot-detail {
+  color: var(--color-on-accent);
+}
+
+.slot-row.is-selected .slot-time::after {
+  content: " \2713"; /* a check, so selection is not colour-only */
+}
+
+.booking-times,
+.booking-form,
+.booking-success {
+  max-width: 36rem;
+}
+
+.booking-chosen {
+  font-size: var(--font-large);
+}
+
+/* ==========================================================================
+   Trainer admin (/admin)
+   ========================================================================== */
+.admin-main {
+  max-width: 48rem;
+}
+
+.admin-tag {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.admin-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.admin-heading-row h1 {
+  margin: 0;
+}
+
+.admin-summary {
+  font-size: var(--font-large);
+}
+
+.admin-booking-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  width: 100%;
+}
+
+/* Status is spelled out in words; colour only reinforces it. */
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.status-badge--new {
+  background: #fff4d6;
+  color: #6b4a00;
+}
+
+.status-badge--confirmed {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.status-badge--cancelled {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.admin-booking--new {
+  border-left-color: #b7791f;
+}
+
+.admin-booking--cancelled {
+  border-left-color: var(--color-border);
+}
+
+.admin-note {
+  white-space: pre-wrap;
+}
+
+.admin-past {
+  margin-top: 2.5rem;
+}
+
+.admin-past summary {
+  min-height: var(--min-target);
+  display: flex;
+  align-items: center;
+  font-size: var(--font-large);
+  font-weight: 700;
+  cursor: pointer;
 }

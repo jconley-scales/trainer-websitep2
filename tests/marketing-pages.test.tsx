@@ -39,7 +39,7 @@ describe("dedicated public pages", () => {
       expect(doc.body.textContent).toContain(s.blurb);
       expect(doc.body.textContent).toContain(s.price);
     }
-    expect(doc.querySelector('a[href="/contact"]')).not.toBeNull();
+    expect(doc.querySelector('a[href="/book"]')).not.toBeNull();
   });
 
   it("testimonials shows every quote and about shows the whole bio", () => {

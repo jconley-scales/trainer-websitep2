@@ -1,10 +1,12 @@
+import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 /**
- * Supabase client for Server Actions, Route Handlers and Server Components.
- * Reads/writes the auth cookies through the Next.js `cookies()` API
- * (async in this version of Next).
+ * Supabase client for the admin area's Server Components and Server Actions.
+ * It carries the signed-in trainer's session (auth cookies via the async
+ * `cookies()` API), so row level security applies: only an admin can read or
+ * change booking requests. proxy.ts refreshes the session cookies.
  */
 export async function createClient() {
   const cookieStore = await cookies();

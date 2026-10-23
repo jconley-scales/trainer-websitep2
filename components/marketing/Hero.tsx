@@ -6,7 +6,6 @@ export function Hero() {
   return (
     <section className="hero" aria-labelledby="hero-title">
       <div className="wrap hero-inner">
-        <p className="hero-eyebrow">{SITE.credentials}</p>
         <h1 id="hero-title" className="hero-title">
           Feel stronger, steadier and more confident
         </h1>
@@ -16,13 +15,14 @@ export function Hero() {
           pace.
         </p>
         <div className="hero-actions">
-          <Link className="button button--accent button--lg" href="/contact">
-            Book a free consult
+          <Link className="button button--accent button--lg" href="/book">
+            Book a session
           </Link>
-          <Link className="button button-secondary button--lg" href="/login">
-            Client login
+          <Link className="button button-secondary button--lg" href="/contact">
+            Free consultation
           </Link>
         </div>
+        <p className="hero-credentials">{SITE.credentials}</p>
       </div>
     </section>
   );

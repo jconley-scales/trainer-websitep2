@@ -108,7 +108,8 @@ enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
 # Uncomment to expose additional ports for testing user applications that send emails.
-# smtp_port = 54325
+# Exposed so the site's booking notifications land in the local mail viewer.
+smtp_port = 54325
 # pop3_port = 54326
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
@@ -173,8 +174,9 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
-enable_signup = true
+# Allow/disallow new user signups to your project. Off: the only accounts are
+# trainer admins, created with `npm run admin:add` (service role).
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -219,6 +221,9 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
+# Keep this true: in the CLI it switches the email provider (and so the
+# trainer's code sign-in) on or off. New accounts are blocked by
+# `[auth] enable_signup = false` above, not here.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -244,16 +249,11 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# The portal signs in with a one-time CODE, so the emails must contain {{ .Token }}.
-# Existing users get the "magic_link" template; first-time users get "confirmation".
-# (Restart the local stack after editing; hosted projects: paste into Auth > Email Templates.)
+# The trainer signs in to /admin with a one-time CODE, so the email must
+# contain {{ .Token }}. (Hosted projects: paste into Auth > Email Templates.)
 [auth.email.template.magic_link]
-subject = "Your Training Portal sign-in code"
+subject = "Your bookings sign-in code"
 content_path = "./supabase/templates/magic_link.html"
-
-[auth.email.template.confirmation]
-subject = "Your Training Portal sign-in code"
-content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

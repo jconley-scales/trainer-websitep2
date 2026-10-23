@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PageHeader } from "@/components/marketing/PageHeader";
 import { ServicesSection } from "@/components/marketing/ServicesSection";
 
 export const metadata: Metadata = {
@@ -8,5 +9,13 @@ export const metadata: Metadata = {
 };
 
 export default function ServicesPage() {
-  return <ServicesSection headingLevel="h1" />;
+  return (
+    <>
+      <PageHeader
+        title="Services and pricing"
+        lead="Simple, friendly training with no pressure and no jargon."
+      />
+      <ServicesSection page />
+    </>
+  );
 }
