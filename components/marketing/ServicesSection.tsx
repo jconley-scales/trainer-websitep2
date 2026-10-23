@@ -11,19 +11,27 @@ export function ServicesSection({
   headingLevel = "h2",
   variant = "full",
   tone = "default",
+  page = false,
 }: SectionProps) {
   const Heading = headingLevel;
-  const CardHeading = headingLevel === "h1" ? "h2" : "h3";
+  const CardHeading = page || headingLevel === "h1" ? "h2" : "h3";
   const preview = variant === "preview";
   return (
-    <section className={sectionClass(tone)} aria-labelledby="services-title">
+    <section
+      className={sectionClass(tone)}
+      aria-labelledby={page ? "page-title" : "services-title"}
+    >
       <div className="wrap">
-        <Heading id="services-title" className={titleClass(headingLevel)}>
-          {preview ? "What I offer" : "Services and pricing"}
-        </Heading>
-        <p className="section-intro">
-          Simple, friendly training with no pressure and no jargon.
-        </p>
+        {page ? null : (
+          <>
+            <Heading id="services-title" className={titleClass(headingLevel)}>
+              {preview ? "What I offer" : "Services and pricing"}
+            </Heading>
+            <p className="section-intro">
+              Simple, friendly training with no pressure and no jargon.
+            </p>
+          </>
+        )}
         <ul className="feature-grid">
           {SITE.services.map((service) => (
             <li key={service.title} className="feature-card">

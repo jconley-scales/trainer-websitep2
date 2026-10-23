@@ -618,6 +618,30 @@ button.slot-row:hover:not(:disabled) {
   color: #ffffff;
 }
 
+/* Dedicated-page header: the same green field as the hero, carrying the page's
+   one h1 and a lead line, so the inner pages read as one site with the home. */
+.page-header {
+  padding-block: 4rem;
+  background: var(--color-hero);
+  color: var(--color-on-hero);
+}
+
+.page-header-title {
+  margin: 0;
+  font-size: clamp(2.3rem, 5vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-on-hero);
+}
+
+.page-header-lead {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: var(--color-hero-lead);
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
+  line-height: 1.5;
+}
+
 /* Buttons */
 .button--accent {
   border-color: var(--color-accent);
@@ -843,7 +867,8 @@ button.button--accent:hover:not(:disabled) {
     padding-block: 2.5rem;
   }
 
-  .hero {
+  .hero,
+  .page-header {
     padding-block: 2.5rem;
   }
 

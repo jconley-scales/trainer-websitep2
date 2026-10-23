@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { ContactSection } from "@/components/marketing/ContactSection";
+import { PageHeader } from "@/components/marketing/PageHeader";
+import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -8,5 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
-  return <ContactSection headingLevel="h1" />;
+  return (
+    <>
+      <PageHeader title="Get in touch" lead={SITE.contactIntro} />
+      <ContactSection page />
+    </>
+  );
 }

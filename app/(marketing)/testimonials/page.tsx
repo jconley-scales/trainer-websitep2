@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ConsultCta } from "@/components/marketing/ConsultCta";
+import { PageHeader } from "@/components/marketing/PageHeader";
 import { TestimonialsSection } from "@/components/marketing/TestimonialsSection";
+import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Testimonials",
@@ -11,7 +13,11 @@ export const metadata: Metadata = {
 export default function TestimonialsPage() {
   return (
     <>
-      <TestimonialsSection headingLevel="h1" />
+      <PageHeader
+        title="Kind words from clients"
+        lead={`What it is like to train with ${SITE.trainerFirstName}.`}
+      />
+      <TestimonialsSection page />
       <ConsultCta />
     </>
   );

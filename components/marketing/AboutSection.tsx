@@ -10,12 +10,16 @@ export function AboutSection({
   headingLevel = "h2",
   variant = "full",
   tone = "default",
+  page = false,
 }: SectionProps) {
   const Heading = headingLevel;
   const preview = variant === "preview";
   const paragraphs = preview ? SITE.about.slice(0, 1) : SITE.about;
   return (
-    <section className={sectionClass(tone)} aria-labelledby="about-title">
+    <section
+      className={sectionClass(tone)}
+      aria-labelledby={page ? "page-title" : "about-title"}
+    >
       <div className="wrap about-grid">
         <div
           className="photo-placeholder"
@@ -27,10 +31,14 @@ export function AboutSection({
           </span>
         </div>
         <div>
-          <Heading id="about-title" className={titleClass(headingLevel)}>
-            About {SITE.trainerFirstName}
-          </Heading>
-          <p className="about-credentials">{SITE.credentials}</p>
+          {page ? null : (
+            <>
+              <Heading id="about-title" className={titleClass(headingLevel)}>
+                About {SITE.trainerFirstName}
+              </Heading>
+              <p className="about-credentials">{SITE.credentials}</p>
+            </>
+          )}
           {paragraphs.map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
