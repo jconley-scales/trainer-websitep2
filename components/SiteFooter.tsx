@@ -25,8 +25,8 @@ export function SiteFooter() {
               </li>
             ))}
             <li>
-              <Link className="nav-link" href="/login">
-                Client login
+              <Link className="nav-link" href="/book">
+                Book a session
               </Link>
             </li>
           </ul>

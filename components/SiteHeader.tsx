@@ -16,8 +16,8 @@ export function SiteHeader() {
               {link.label}
             </NavLink>
           ))}
-          <Link className="nav-cta" href="/login">
-            Client login
+          <Link className="nav-cta" href="/book">
+            Book a session
           </Link>
         </nav>
       </div>

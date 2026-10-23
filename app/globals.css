@@ -1003,3 +1003,123 @@ button,
   }
 }
 
+/* ==========================================================================
+   Public booking (calendar -> times -> details)
+   ========================================================================== */
+.booking {
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
+  max-width: 40rem;
+}
+
+.booking-hint,
+.booking-empty {
+  margin: 0;
+  font-size: var(--font-large);
+  color: var(--color-text-muted);
+}
+
+.booking-empty a,
+.booking-success a {
+  color: var(--color-primary);
+}
+
+.booking-month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+  margin-bottom: 1rem;
+}
+
+.booking-month-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.booking-month-bar .button {
+  padding: 0 1rem;
+  font-size: 1.5rem;
+}
+
+.booking-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.booking-grid th {
+  padding: 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.booking-cell {
+  padding: 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.booking-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--radius);
+  font-size: var(--font-large);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.booking-day--off {
+  color: var(--color-text-muted);
+  opacity: 0.55;
+}
+
+/* Days with an open session: an accent-outlined, tappable button. */
+.booking-day--open {
+  border: 2px solid var(--color-accent);
+  background: var(--color-bg);
+  color: var(--color-accent-dark);
+  cursor: pointer;
+}
+
+.booking-day--open:hover {
+  background: var(--color-bg-tint);
+}
+
+.booking-day--open.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* Selected time row (reuses .slot-row); mark with more than colour via a check. */
+.slot-row.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.slot-row.is-selected .slot-time,
+.slot-row.is-selected .slot-detail {
+  color: var(--color-on-accent);
+}
+
+.slot-row.is-selected .slot-time::after {
+  content: " \2713"; /* a check, so selection is not colour-only */
+}
+
+.booking-times,
+.booking-form,
+.booking-success {
+  max-width: 36rem;
+}
+
+.booking-chosen {
+  font-size: var(--font-large);
+}

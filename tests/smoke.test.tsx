@@ -3,8 +3,6 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import MarketingLayout from "@/app/(marketing)/layout";
-import PortalLayout from "@/app/(portal)/layout";
-import LoginLayout from "@/app/login/layout";
 import RootLayout from "@/app/layout";
 import { SITE } from "@/lib/site";
 
@@ -28,11 +26,7 @@ function renderWith(Layout: (props: { children: React.ReactNode }) => React.Reac
   return new DOMParser().parseFromString(html, "text/html");
 }
 
-const LAYOUTS = [
-  ["marketing", MarketingLayout],
-  ["login", LoginLayout],
-  ["portal", PortalLayout],
-] as const;
+const LAYOUTS = [["marketing", MarketingLayout]] as const;
 
 function token(name: string): string {
   const match = css.match(new RegExp(String.raw`${name}:\s*([^;]+);`));

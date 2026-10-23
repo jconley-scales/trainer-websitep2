@@ -11,8 +11,8 @@ export function ConsultCta() {
         </h2>
         <p className="section-intro">{SITE.contactIntro}</p>
         <div className="hero-actions contact-actions">
-          <Link className="button button--accent button--lg" href="/contact">
-            Book a free consult
+          <Link className="button button--accent button--lg" href="/book">
+            Book a session
           </Link>
         </div>
       </div>

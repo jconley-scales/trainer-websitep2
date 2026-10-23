@@ -1,5 +1,5 @@
 /**
- * Date and time display for the portal.
+ * Date and time display for the site.
  *
  * Slot times are stored in UTC. Everything the client sees is shown in ONE
  * place-based time zone (the gym's), so a session always reads the same no

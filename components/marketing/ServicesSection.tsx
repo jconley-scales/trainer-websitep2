@@ -54,8 +54,8 @@ export function ServicesSection({
               find what suits you.
             </p>
             <p className="section-more">
-              <Link className="button button--accent button--lg" href="/contact">
-                Book a free consult
+              <Link className="button button--accent button--lg" href="/book">
+                Book a session
               </Link>
             </p>
           </>
