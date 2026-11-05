@@ -284,20 +284,17 @@ test.describe("/ (public home page)", () => {
     await expect(page.locator("footer")).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
-    for (const id of ["services", "about", "testimonials", "contact"]) {
+    for (const id of ["services", "about", "contact"]) {
       await expect(page.locator(`section[aria-labelledby="${id}-title"] h2`)).toHaveCount(1);
     }
     const main = page.locator("main#main-content");
     for (const [name, href] of [
       ["See all services", "/services"],
       ["Read more about Sarah", "/about"],
-      ["More kind words from clients", "/testimonials"],
       ["Get in touch with Sarah", "/contact"],
     ]) {
       await expect(main.getByRole("link", { name })).toHaveAttribute("href", href);
     }
-    // The home page is a landing page: previews only, two quotes not three.
-    await expect(main.locator(".testimonial-card")).toHaveCount(2);
   });
 
   test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
@@ -331,14 +328,12 @@ const PUBLIC_NAV = [
   ["Home", "/"],
   ["About", "/about"],
   ["Services", "/services"],
-  ["Testimonials", "/testimonials"],
   ["Contact", "/contact"],
 ] as const;
 
 const PUBLIC_PAGES = [
   { path: "/about", nav: "About", h1: /^About /, title: /^About .+ \| Peak Form Training$/ },
   { path: "/services", nav: "Services", h1: "Services and pricing", title: /^Services and pricing \| / },
-  { path: "/testimonials", nav: "Testimonials", h1: "Kind words from clients", title: /^Testimonials \| / },
   { path: "/contact", nav: "Contact", h1: "Get in touch", title: /^Contact \| / },
 ] as const;
 
@@ -393,11 +388,6 @@ test.describe("public page content and links", () => {
     await page.goto("/services");
     await expect(page.locator(".feature-card")).toHaveCount(3);
     await expect(page.getByRole("link", { name: "Book a free consult" }).first()).toHaveAttribute("href", "/contact");
-  });
-
-  test("testimonials shows all the quotes", async ({ page }) => {
-    await page.goto("/testimonials");
-    await expect(page.locator(".testimonial-card")).toHaveCount(3);
   });
 
   test("contact has real mailto and tel links and a form that composes a mailto (no backend)", async ({ page }) => {
