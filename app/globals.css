@@ -6,35 +6,38 @@
   --font-heading: 1.75rem;
   --line-height: 1.6;
 
-  /* Colors (WCAG 2.1 AA: body text >= 4.5:1, UI/focus >= 3:1 on --color-bg) */
-  --color-bg: #ffffff;
-  --color-surface: #f4f6f8;
-  --color-text: #1a1a1a;
-  --color-text-muted: #4a4a4a;
-  --color-primary: #0b5394;
-  --color-primary-dark: #084074;
-  --color-on-primary: #ffffff;
-  --color-border: #767676;
-  --color-focus: #b45309;
-  --color-error: #b00020;
+  /* Colors (WCAG 2.1 AA: body text >= 4.5:1, UI/focus >= 3:1 on --color-bg)
+     Palette: "green-black and bone" - bone type on a green-black ground, panels a
+     small step lighter, pale jade for actions and links. */
+  --color-bg: #141a18;
+  --color-surface: #1d2522;
+  --color-text: #e4e6e1; /* ≈14:1 on --color-bg */
+  --color-text-muted: #a9aea6; /* ≈7.8:1 on --color-bg */
+  --color-primary: #9fc7b8; /* ≈9.8:1 on --color-bg */
+  --color-primary-dark: #c4e0d5; /* hover: one step lighter on a dark ground */
+  --color-on-primary: #141a18;
+  --color-border: #7d867f; /* form fields: ≈4.8:1 on --color-bg */
+  --color-focus: #f0b45a;
+  --color-error: #ff9b8f;
 
   /* Sizing */
   --min-target: 48px;
   --space: 1rem;
   --content-width: 40rem;
 
-  /* Marketing / "clean & trustworthy" additions (additive: tokens above are unchanged) */
-  --color-accent: #0f7a52; /* 5.4:1 as text on white; white text on it is also 5.4:1 */
-  --color-accent-dark: #0b5c3e;
-  --color-on-accent: #ffffff;
-  --color-bg-alt: #f3f7fb;
-  --color-bg-tint: #dcebf7;
+  /* Marketing additions */
+  --color-accent: #9fc7b8;
+  --color-accent-dark: #c4e0d5;
+  --color-on-accent: #141a18;
+  --color-bg-alt: #1d2522;
+  --color-bg-tint: #26302d;
+  --color-line: #2f3a36; /* hairline card and divider borders */
 
-  /* Hero: a flat field of the brand green, white text (white on #0b4a33 ≈ 10:1). */
-  --color-hero: #0b4a33;
-  --color-on-hero: #ffffff;
-  --color-hero-lead: #d7ebe0; /* ≈10:1 on --color-hero */
-  --shadow-card: 0 1px 2px rgb(16 42 67 / 0.08), 0 4px 16px rgb(16 42 67 / 0.08);
+  /* Hero and page headers sit on the same ground as the page. */
+  --color-hero: #141a18;
+  --color-on-hero: #e4e6e1;
+  --color-hero-lead: #e4e6e1;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.3);
   --radius: 8px;
   --radius-lg: 16px;
   --site-width: 70rem;
@@ -44,6 +47,8 @@
   --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --t-press: 140ms;
   --t-hover: 180ms;
+
+  color-scheme: dark;
 }
 
 *,
@@ -236,7 +241,7 @@ input[type="radio"] {
 /* Sign-in card */
 .login {
   padding: 1.5rem;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
   box-shadow: var(--shadow-card);
@@ -273,8 +278,8 @@ button:disabled {
 }
 
 button.button-danger:hover:not(:disabled) {
-  border-color: #8a0019;
-  background: #8a0019;
+  border-color: #ffc2ba;
+  background: #ffc2ba;
 }
 
 /* Sessions home */
@@ -293,7 +298,7 @@ button.button-danger:hover:not(:disabled) {
   align-items: flex-start;
   gap: var(--space);
   padding: 1.5rem;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--color-line);
   border-left: 6px solid var(--color-accent);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
@@ -330,7 +335,7 @@ button.button-danger:hover:not(:disabled) {
 
 .empty-state {
   padding: 1.5rem;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
   box-shadow: var(--shadow-card);
@@ -342,16 +347,16 @@ button.button-danger:hover:not(:disabled) {
   width: calc(100% - 2 * var(--space));
   max-width: 32rem;
   padding: 1.5rem;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
-  box-shadow: 0 12px 40px rgb(16 42 67 / 0.35);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.6);
   color: var(--color-text);
   font-size: var(--font-large);
 }
 
 .dialog::backdrop {
-  background: rgb(0 0 0 / 0.65);
+  background: rgb(0 0 0 / 0.7);
 }
 
 .dialog-body p {
@@ -596,32 +601,30 @@ button.slot-row:hover:not(:disabled) {
   font-weight: 600;
 }
 
-/* On the green field the accent button would vanish: invert to a white fill,
-   and make the secondary a plain outline in white. */
-.hero .button--accent,
-.hero .button--accent:hover {
-  border-color: #ffffff;
-  background: #ffffff;
-  color: var(--color-hero);
+/* On the dark ground: jade fill for the action, a bone outline for the secondary. */
+.hero .button--accent {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .hero .button--accent:hover {
-  background: var(--color-bg-tint);
-  border-color: var(--color-bg-tint);
-  color: var(--color-primary-dark);
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
+  color: var(--color-on-accent);
 }
 
 .hero .button-secondary,
 .hero .button.button-secondary {
   background: transparent;
-  border-color: #ffffff;
-  color: #ffffff;
+  border-color: var(--color-on-hero);
+  color: var(--color-on-hero);
 }
 
 .hero .button.button-secondary:hover {
-  background: rgb(255 255 255 / 0.14);
-  border-color: #ffffff;
-  color: #ffffff;
+  background: rgb(228 230 225 / 0.12);
+  border-color: var(--color-on-hero);
+  color: var(--color-on-hero);
 }
 
 /* Dedicated-page header: the same green field as the hero, carrying the page's
@@ -800,7 +803,7 @@ button.button--accent:hover:not(:disabled) {
   max-width: 40rem;
   margin-inline: auto;
   padding: 2rem;
-  border: 1px solid #d9e2ec;
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
   box-shadow: var(--shadow-card);
@@ -862,7 +865,7 @@ button.button--accent:hover:not(:disabled) {
 .site-footer-legal {
   margin: 1.5rem 0 0 !important;
   padding-top: 1rem;
-  border-top: 1px solid #d9e2ec;
+  border-top: 1px solid var(--color-line);
   color: var(--color-text-muted);
   font-size: 1rem;
 }
@@ -1171,8 +1174,8 @@ button,
 }
 
 .status-badge--new {
-  background: #fff4d6;
-  color: #6b4a00;
+  background: #f0c46a;
+  color: #2a1f00;
 }
 
 .status-badge--confirmed {
@@ -1186,7 +1189,7 @@ button,
 }
 
 .admin-booking--new {
-  border-left-color: #b7791f;
+  border-left-color: #f0c46a;
 }
 
 .admin-booking--cancelled {
