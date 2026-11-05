@@ -671,7 +671,7 @@ button.button--accent:hover:not(:disabled) {
   font-size: 1.3rem;
 }
 
-/* Service and testimonial cards */
+/* Service cards */
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
@@ -679,11 +679,6 @@ button.button--accent:hover:not(:disabled) {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-/* Quotes get more air than panels, so the two sections do not read alike. */
-.feature-grid:has(.testimonial-card) {
-  gap: 2.5rem 3rem;
 }
 
 /* Service panels: a flat step in tone, no border or shadow. */
@@ -708,43 +703,6 @@ button.button--accent:hover:not(:disabled) {
   margin: auto 0 0;
   color: var(--color-accent);
   font-weight: 700;
-}
-
-.testimonial-card figure {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  margin: 0;
-}
-
-.testimonial-card {
-  padding: 0.25rem 0;
-}
-
-.testimonial-card blockquote {
-  flex: 1;
-  margin: 0 0 1.25rem;
-  padding: 0 0 0 1.5rem;
-  border-left: 5px solid var(--color-accent);
-  /* Statement size: large enough to read as a quote, under the headline rule. */
-  font-size: clamp(1.3rem, 1.8vw, 1.6rem);
-  line-height: 1.45;
-}
-
-.testimonial-card blockquote p {
-  margin: 0;
-}
-
-.testimonial-card figcaption {
-  display: flex;
-  flex-direction: column;
-  padding-left: 1.5rem;
-  color: var(--color-text-muted);
-  font-size: var(--font-large);
-}
-
-.testimonial-card figcaption strong {
-  color: var(--color-text);
 }
 
 /* About */

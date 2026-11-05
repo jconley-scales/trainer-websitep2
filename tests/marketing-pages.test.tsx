@@ -4,7 +4,6 @@ import AboutPage, { metadata as aboutMeta } from "@/app/(marketing)/about/page";
 import ContactPage, { metadata as contactMeta } from "@/app/(marketing)/contact/page";
 import HomePage from "@/app/(marketing)/page";
 import ServicesPage, { metadata as servicesMeta } from "@/app/(marketing)/services/page";
-import TestimonialsPage, { metadata as testimonialsMeta } from "@/app/(marketing)/testimonials/page";
 import { buildMailto, composeContactBody } from "@/lib/contact";
 import { NAV_LINKS, SITE } from "@/lib/site";
 
@@ -19,7 +18,6 @@ describe("dedicated public pages", () => {
   const pages = [
     ["about", AboutPage, aboutMeta, `About ${SITE.trainerFirstName}`],
     ["services", ServicesPage, servicesMeta, "Services and pricing"],
-    ["testimonials", TestimonialsPage, testimonialsMeta, "Kind words from clients"],
     ["contact", ContactPage, contactMeta, "Get in touch"],
   ] as const;
 
@@ -42,9 +40,7 @@ describe("dedicated public pages", () => {
     expect(doc.querySelector('a[href="/book"]')).not.toBeNull();
   });
 
-  it("testimonials shows every quote and about shows the whole bio", () => {
-    const t = render(<TestimonialsPage />);
-    for (const q of SITE.testimonials) expect(t.body.textContent).toContain(q.quote);
+  it("about shows the whole bio", () => {
     const a = render(<AboutPage />);
     for (const p of SITE.about) expect(a.body.textContent).toContain(p);
     expect(a.body.textContent).toContain(SITE.philosophy);
@@ -62,11 +58,10 @@ describe("home page", () => {
   it("is a landing page: one h1, previews that link to each dedicated page", () => {
     const doc = render(<HomePage />);
     expect(doc.querySelectorAll("h1")).toHaveLength(1);
-    for (const href of ["/services", "/about", "/testimonials", "/contact"]) {
+    for (const href of ["/services", "/about", "/contact"]) {
       expect(doc.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
     // Previews, not the full content.
-    expect(doc.querySelectorAll(".testimonial-card")).toHaveLength(2);
     expect(doc.body.textContent).not.toContain(SITE.philosophy);
     expect(doc.body.textContent).not.toContain(SITE.services[0].blurb);
   });
@@ -74,7 +69,7 @@ describe("home page", () => {
 
 describe("navigation links", () => {
   it("point at real routes, not anchors", () => {
-    expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/services", "/testimonials", "/contact"]);
+    expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/services", "/contact"]);
   });
 });
 

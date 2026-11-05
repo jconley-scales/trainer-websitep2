@@ -43,32 +43,11 @@ export const SITE = {
       price: "From $35 per person",
     },
   ],
-  testimonials: [
-    {
-      quote:
-        "I hadn't exercised in twenty years and was nervous. Sarah made it feel easy and safe. I can now carry my shopping and climb stairs without puffing.",
-      name: "Margaret R.",
-      descriptor: "Client, age 67",
-    },
-    {
-      quote:
-        "Patient, kind and really knowledgeable. She adjusted everything around my sore knee, and my balance is so much better.",
-      name: "David L.",
-      descriptor: "Client, age 61",
-    },
-    {
-      quote:
-        "I never thought I would look forward to a workout. The booking is simple and every session leaves me feeling stronger.",
-      name: "Priya S.",
-      descriptor: "Client, age 54",
-    },
-  ],
 } as const;
 
 export const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/services", label: "Services" },
-  { href: "/testimonials", label: "Testimonials" },
   { href: "/contact", label: "Contact" },
 ] as const;
