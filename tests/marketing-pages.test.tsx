@@ -1,9 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import AboutPage, { metadata as aboutMeta } from "@/app/(marketing)/about/page";
+import BookPage from "@/app/(marketing)/book/page";
 import ContactPage, { metadata as contactMeta } from "@/app/(marketing)/contact/page";
 import HomePage from "@/app/(marketing)/page";
-import { buildMailto, composeContactBody } from "@/lib/contact";
+import PricingPage, { metadata as pricingMeta } from "@/app/(marketing)/pricing/page";
+import TestimonialsPage, { metadata as testimonialsMeta } from "@/app/(marketing)/testimonials/page";
+import { formatUsd } from "@/lib/format";
+import { GALLERY } from "@/lib/photos";
 import { NAV_LINKS, SITE } from "@/lib/site";
 
 function render(node: React.ReactNode) {
@@ -16,6 +20,8 @@ function render(node: React.ReactNode) {
 describe("dedicated public pages", () => {
   const pages = [
     ["about", AboutPage, aboutMeta, `About ${SITE.trainerFirstName}`],
+    ["pricing", PricingPage, pricingMeta, "Session prices"],
+    ["testimonials", TestimonialsPage, testimonialsMeta, "What clients say"],
     ["contact", ContactPage, contactMeta, "Get in touch"],
   ] as const;
 
@@ -28,17 +34,47 @@ describe("dedicated public pages", () => {
     expect(meta.description).toBeTruthy();
   });
 
-  it("about shows the whole bio", () => {
+  it("about shows the whole bio, the philosophy, every certification and a real photo", () => {
     const a = render(<AboutPage />);
     for (const p of SITE.about) expect(a.body.textContent).toContain(p);
     expect(a.body.textContent).toContain(SITE.philosophy);
+    const certs = [...a.querySelectorAll(".cert-list li")].map((li) => li.textContent);
+    expect(certs).toEqual([...SITE.certifications]);
+    expect(a.querySelector("img.about-photo")?.getAttribute("alt")).toBeTruthy();
   });
 
-  it("contact has real mailto and tel links", () => {
+  it("pricing shows every package with its per-session cost and the assessment note", () => {
+    const doc = render(<PricingPage />);
+    const text = doc.body.textContent ?? "";
+    expect(text).toContain(SITE.assessmentNote);
+    expect(doc.querySelectorAll(".price-card")).toHaveLength(SITE.prices.length);
+    for (const { sessions, total } of SITE.prices) {
+      expect(text).toContain(formatUsd(total));
+      if (sessions > 1) expect(text).toContain(`${formatUsd(total / sessions)} per session`);
+    }
+  });
+
+  it("testimonials shows every quote in full with the client's name", () => {
+    const doc = render(<TestimonialsPage />);
+    expect(doc.querySelectorAll(".testimonial-card")).toHaveLength(SITE.testimonials.length);
+    for (const t of SITE.testimonials) {
+      for (const p of t.quote) expect(doc.body.textContent).toContain(p);
+      expect(doc.body.textContent).toContain(t.name);
+    }
+  });
+
+  it("contact publishes no email or phone and has a message form with an email field", () => {
     const doc = render(<ContactPage />);
-    expect(doc.querySelector(`a[href^="mailto:${SITE.email}"]`)).not.toBeNull();
-    expect(doc.querySelector(`a[href="tel:${SITE.phoneHref}"]`)).not.toBeNull();
+    expect(doc.querySelector('a[href^="mailto:"], a[href^="tel:"]')).toBeNull();
     expect(doc.querySelector("form")).not.toBeNull();
+    expect(doc.querySelector('input[type="email"]')).not.toBeNull();
+  });
+
+  it("booking shows the per-session price range and links to pricing", () => {
+    const doc = render(<BookPage />);
+    const note = doc.querySelector(".booking-price-note");
+    expect(note?.textContent).toContain("$70 to $85");
+    expect(note?.querySelector('a[href="/pricing"]')).not.toBeNull();
   });
 });
 
@@ -46,38 +82,41 @@ describe("home page", () => {
   it("is a landing page: one h1, previews that link to each dedicated page", () => {
     const doc = render(<HomePage />);
     expect(doc.querySelectorAll("h1")).toHaveLength(1);
-    for (const href of ["/about", "/contact"]) {
+    for (const href of ["/about", "/pricing", "/testimonials", "/contact"]) {
       expect(doc.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
-    // Previews, not the full content.
+    // A short about-me, not the full bio.
+    expect(doc.body.textContent).toContain(SITE.about[0]);
+    expect(doc.body.textContent).not.toContain(SITE.about[2]);
     expect(doc.body.textContent).not.toContain(SITE.philosophy);
+    // Every package price and the assessment note.
+    for (const { total } of SITE.prices) expect(doc.body.textContent).toContain(formatUsd(total));
+    expect(doc.body.textContent).toContain(SITE.assessmentNote);
+    // Only the first testimonial.
+    expect(doc.querySelectorAll(".testimonial-card")).toHaveLength(1);
+  });
+
+  it("shows every photo: hero, portrait and the whole gallery", () => {
+    const doc = render(<HomePage />);
+    expect(doc.querySelector("img.hero-photo")).not.toBeNull();
+    expect(doc.querySelector("img.about-photo")).not.toBeNull();
+    expect(doc.querySelectorAll(".gallery-button")).toHaveLength(GALLERY.length);
+    for (const button of doc.querySelectorAll(".gallery-button")) {
+      expect(button.getAttribute("aria-label")).toMatch(/^View larger: \S/);
+    }
   });
 });
 
 describe("navigation links", () => {
   it("point at real routes, not anchors", () => {
-    expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/contact"]);
+    expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/pricing", "/testimonials", "/contact"]);
   });
 });
 
-describe("mailto helpers", () => {
-  it("builds an encoded mailto link", () => {
-    const url = buildMailto({ to: "a@b.example", subject: "Free consultation", body: "Hi\r\nthere & you" });
-    expect(url).toBe("mailto:a@b.example?subject=Free%20consultation&body=Hi%0D%0Athere%20%26%20you");
-  });
-
-  it("omits the body when there is none", () => {
-    expect(buildMailto({ to: "a@b.example", subject: "Hello" })).toBe("mailto:a@b.example?subject=Hello");
-  });
-
-  it("composes a plain-text body with an optional phone line", () => {
-    const body = composeContactBody({
-      trainerFirstName: "Sarah",
-      name: " Pat ",
-      phone: "555 1234",
-      message: " Hello there ",
-    });
-    expect(body).toBe("Hello Sarah,\r\n\r\nHello there\r\n\r\nKind regards,\r\nPat\r\nPhone: 555 1234");
-    expect(composeContactBody({ trainerFirstName: "Sarah", name: "Pat", message: "Hi" })).not.toContain("Phone");
+describe("prices", () => {
+  it("formats whole dollars without cents", () => {
+    expect(formatUsd(85)).toBe("$85");
+    expect(formatUsd(1050)).toBe("$1,050");
+    expect(formatUsd(80)).toBe("$80");
   });
 });

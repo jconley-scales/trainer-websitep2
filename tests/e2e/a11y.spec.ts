@@ -284,16 +284,37 @@ test.describe("/ (public home page)", () => {
     await expect(page.locator("footer")).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
-    for (const id of ["about", "contact"]) {
+    for (const id of ["about", "pricing", "gallery", "testimonials", "contact"]) {
       await expect(page.locator(`section[aria-labelledby="${id}-title"] h2`)).toHaveCount(1);
     }
     const main = page.locator("main#main-content");
     for (const [name, href] of [
-      ["Read more about Sarah", "/about"],
-      ["Get in touch with Sarah", "/contact"],
+      ["Read more about Jervaughn", "/about"],
+      ["See pricing details", "/pricing"],
+      ["Read more testimonials", "/testimonials"],
+      ["Get in touch with Jervaughn", "/contact"],
     ]) {
       await expect(main.getByRole("link", { name })).toHaveAttribute("href", href);
     }
+    // Every package price is on the home page; the photo grid has every photo.
+    for (const price of ["$85", "$400", "$750", "$1,050"]) {
+      await expect(main.locator(".price-total", { hasText: price })).toHaveCount(1);
+    }
+    await expect(main.locator(".gallery-button")).toHaveCount(5);
+  });
+
+  test("a gallery photo opens larger in a dialog and closes again", async ({ page }) => {
+    await page.goto("/");
+    const first = page.locator(".gallery-button").first();
+    await first.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("img")).toBeVisible();
+    await dialog.getByRole("button", { name: "Close photo" }).click();
+    await expect(dialog).toBeHidden();
+    await first.click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
   });
 
   test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
@@ -318,7 +339,7 @@ test.describe("/ (public home page)", () => {
     await page.getByRole("banner").getByRole("link", { name: "Client login" }).click();
     await expect(page).toHaveURL(/\/login$/);
     // The sign-in page has a way back to the public site.
-    await page.getByRole("banner").getByRole("link", { name: "Peak Form Training" }).click();
+    await page.getByRole("banner").getByRole("link", { name: "My Older Fitness" }).click();
     await expect(page).toHaveURL(/\/$/);
   });
 });
@@ -326,17 +347,21 @@ test.describe("/ (public home page)", () => {
 const PUBLIC_NAV = [
   ["Home", "/"],
   ["About", "/about"],
+  ["Pricing", "/pricing"],
+  ["Testimonials", "/testimonials"],
   ["Contact", "/contact"],
 ] as const;
 
 const PUBLIC_PAGES = [
-  { path: "/about", nav: "About", h1: /^About /, title: /^About .+ \| Peak Form Training$/ },
+  { path: "/about", nav: "About", h1: /^About /, title: /^About .+ \| My Older Fitness$/ },
+  { path: "/pricing", nav: "Pricing", h1: "Session prices", title: /^Pricing \| / },
+  { path: "/testimonials", nav: "Testimonials", h1: "What clients say", title: /^Testimonials \| / },
   { path: "/contact", nav: "Contact", h1: "Get in touch", title: /^Contact \| / },
 ] as const;
 
 /** The contact form's submit button is disabled until the page has hydrated. */
 async function waitForInteractive(page: Page) {
-  for (const button of await page.getByRole("button", { name: "Open my email app" }).all()) {
+  for (const button of await page.getByRole("button", { name: "Send message" }).all()) {
     await expect(button).toBeEnabled();
   }
 }
@@ -381,26 +406,34 @@ for (const { path, nav, h1, title } of PUBLIC_PAGES) {
 }
 
 test.describe("public page content and links", () => {
-  test("contact has real mailto and tel links and a form that composes a mailto (no backend)", async ({ page }) => {
+  test("contact publishes no email or phone, and the form posts to the server, never the URL", async ({ page }) => {
     await page.goto("/contact");
     const main = page.locator("main#main-content");
-    await expect(main.getByRole("link", { name: /^Email / })).toHaveAttribute("href", /^mailto:[^?]+\?subject=/);
-    await expect(main.getByRole("link", { name: /^Call / })).toHaveAttribute("href", /^tel:\+?\d+$/);
+    await expect(page.locator('a[href^="mailto:"], a[href^="tel:"]')).toHaveCount(0);
     await expect(main.getByLabel("Your name")).toBeVisible();
+    await expect(main.getByLabel("Your email")).toBeVisible();
     await expect(main.getByLabel("Your message")).toBeVisible();
-    // Submitting only hands a mailto: link to the email app: no request to any server,
-    // nothing personal in any URL, and the visitor stays on the page.
     const requests: { method: string; url: string }[] = [];
     page.on("request", (r) => requests.push({ method: r.method(), url: r.url() }));
-    const submit = main.getByRole("button", { name: "Open my email app" });
+    const submit = main.getByRole("button", { name: "Send message" });
     await expect(submit).toBeEnabled();
     await main.getByLabel("Your name").fill("Pat Example");
-    await main.getByLabel("Your phone number (optional)").fill("555 0100");
-    await main.getByLabel("Your message").fill("I would like a free consultation.");
+    await main.getByLabel("Your email").fill("pat@example.com");
+    await main.getByLabel("Your message").fill("I would like to start training.");
     await submit.click();
+    // Sent (thank-you) or, with no mail server in the test run, a clear error.
+    await expect(main.getByRole("status").or(main.getByRole("alert"))).toBeVisible();
     await expect(page).toHaveURL(/\/contact$/);
-    expect(requests.filter((r) => r.method !== "GET")).toEqual([]);
-    expect(requests.filter((r) => r.url.includes("/contact?"))).toEqual([]);
+    expect(requests.filter((r) => r.method === "POST").length).toBeGreaterThan(0);
+    expect(requests.filter((r) => r.url.includes("Pat") || r.url.includes("/contact?"))).toEqual([]);
+  });
+
+  test("booking shows the price range and links to pricing", async ({ page }) => {
+    await page.goto("/book");
+    const note = page.locator(".booking-price-note");
+    await expect(note).toContainText("$70");
+    await expect(note).toContainText("$85");
+    await expect(note.getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
   });
 
   test("without JavaScript the form cannot be submitted, so nothing personal reaches the URL", async ({ browser, baseURL }) => {
@@ -410,7 +443,7 @@ test.describe("public page content and links", () => {
     page.on("request", (r) => urls.push(r.url()));
     await page.goto("/contact");
     const main = page.locator("main#main-content");
-    await expect(main.getByRole("button", { name: "Open my email app" })).toBeDisabled();
+    await expect(main.getByRole("button", { name: "Send message" })).toBeDisabled();
     await main.getByLabel("Your name").fill("Pat Example");
     await main.getByLabel("Your message").fill("Private words");
     await main.getByLabel("Your name").press("Enter"); // implicit submission must be blocked too

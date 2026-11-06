@@ -10,9 +10,7 @@ export function SiteFooter() {
           <p className="site-footer-brand">{SITE.name}</p>
           <p>{SITE.tagline}</p>
           <p>
-            <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
-            <br />
-            <a href={`tel:${SITE.phoneHref}`}>{SITE.phone}</a>
+            <Link href="/contact">Send {SITE.trainerFirstName} a message</Link>
           </p>
         </div>
         <nav aria-label="Footer">

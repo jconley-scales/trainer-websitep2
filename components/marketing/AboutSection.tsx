@@ -1,10 +1,13 @@
+import Image from "next/image";
 import Link from "next/link";
+import { PORTRAIT } from "@/lib/photos";
 import { SITE } from "@/lib/site";
 import { sectionClass, titleClass, type SectionProps } from "./types";
 
 /**
- * About the trainer. "preview" shows the credentials and first paragraph with a
- * "Read more" link; "full" has the whole bio and philosophy.
+ * About the trainer. "preview" is the short home-page "about me": credentials
+ * and the first paragraph with a "Read more" link. "full" has the whole bio,
+ * philosophy and every certification.
  */
 export function AboutSection({
   headingLevel = "h2",
@@ -21,15 +24,12 @@ export function AboutSection({
       aria-labelledby={page ? "page-title" : "about-title"}
     >
       <div className="wrap about-grid">
-        <div
-          className="photo-placeholder"
-          role="img"
-          aria-label={`Photo of ${SITE.trainer} (coming soon)`}
-        >
-          <span className="photo-initials" aria-hidden="true">
-            {SITE.initials}
-          </span>
-        </div>
+        <Image
+          className="about-photo"
+          src={PORTRAIT.src}
+          alt={PORTRAIT.alt}
+          sizes="(max-width: 40rem) 12rem, 18rem"
+        />
         <div>
           {page ? null : (
             <>
@@ -49,7 +49,15 @@ export function AboutSection({
               </Link>
             </p>
           ) : (
-            <p className="about-philosophy">{SITE.philosophy}</p>
+            <>
+              <p className="about-philosophy">{SITE.philosophy}</p>
+              <h2 className="about-subtitle">Certifications</h2>
+              <ul className="cert-list">
+                {SITE.certifications.map((cert) => (
+                  <li key={cert}>{cert}</li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </div>
