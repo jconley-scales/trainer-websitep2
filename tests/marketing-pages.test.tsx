@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import AboutPage, { metadata as aboutMeta } from "@/app/(marketing)/about/page";
 import ContactPage, { metadata as contactMeta } from "@/app/(marketing)/contact/page";
 import HomePage from "@/app/(marketing)/page";
-import ServicesPage, { metadata as servicesMeta } from "@/app/(marketing)/services/page";
 import { buildMailto, composeContactBody } from "@/lib/contact";
 import { NAV_LINKS, SITE } from "@/lib/site";
 
@@ -17,7 +16,6 @@ function render(node: React.ReactNode) {
 describe("dedicated public pages", () => {
   const pages = [
     ["about", AboutPage, aboutMeta, `About ${SITE.trainerFirstName}`],
-    ["services", ServicesPage, servicesMeta, "Services and pricing"],
     ["contact", ContactPage, contactMeta, "Get in touch"],
   ] as const;
 
@@ -28,16 +26,6 @@ describe("dedicated public pages", () => {
     expect(headings[0].textContent).toBe(h1);
     expect(meta.title).toBeTruthy();
     expect(meta.description).toBeTruthy();
-  });
-
-  it("services lists every service with its description", () => {
-    const doc = render(<ServicesPage />);
-    for (const s of SITE.services) {
-      expect(doc.body.textContent).toContain(s.title);
-      expect(doc.body.textContent).toContain(s.blurb);
-      expect(doc.body.textContent).toContain(s.price);
-    }
-    expect(doc.querySelector('a[href="/book"]')).not.toBeNull();
   });
 
   it("about shows the whole bio", () => {
@@ -58,18 +46,17 @@ describe("home page", () => {
   it("is a landing page: one h1, previews that link to each dedicated page", () => {
     const doc = render(<HomePage />);
     expect(doc.querySelectorAll("h1")).toHaveLength(1);
-    for (const href of ["/services", "/about", "/contact"]) {
+    for (const href of ["/about", "/contact"]) {
       expect(doc.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
     // Previews, not the full content.
     expect(doc.body.textContent).not.toContain(SITE.philosophy);
-    expect(doc.body.textContent).not.toContain(SITE.services[0].blurb);
   });
 });
 
 describe("navigation links", () => {
   it("point at real routes, not anchors", () => {
-    expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/services", "/contact"]);
+    expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/contact"]);
   });
 });
 

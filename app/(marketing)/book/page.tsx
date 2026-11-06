@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/marketing/PageHeader";
 export const metadata: Metadata = {
   title: "Book a session",
   description:
-    "Choose a day and time for your one-to-one personal training session. Your first consultation is free.",
+    "Choose a day and time for your next training session.",
 };
 
 export default function BookPage() {
@@ -13,7 +13,7 @@ export default function BookPage() {
     <>
       <PageHeader
         title="Book a session"
-        lead="Pick a day and time that suits you. Your first consultation is free, with no obligation."
+        lead="Pick a day and time that suits you. We will sort out the details together once you have booked."
       />
       <section className="section" aria-labelledby="page-title">
         <div className="wrap">

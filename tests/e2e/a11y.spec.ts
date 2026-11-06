@@ -284,12 +284,11 @@ test.describe("/ (public home page)", () => {
     await expect(page.locator("footer")).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.locator('a.skip-link[href="#main-content"]')).toHaveCount(1);
-    for (const id of ["services", "about", "contact"]) {
+    for (const id of ["about", "contact"]) {
       await expect(page.locator(`section[aria-labelledby="${id}-title"] h2`)).toHaveCount(1);
     }
     const main = page.locator("main#main-content");
     for (const [name, href] of [
-      ["See all services", "/services"],
       ["Read more about Sarah", "/about"],
       ["Get in touch with Sarah", "/contact"],
     ]) {
@@ -327,13 +326,11 @@ test.describe("/ (public home page)", () => {
 const PUBLIC_NAV = [
   ["Home", "/"],
   ["About", "/about"],
-  ["Services", "/services"],
   ["Contact", "/contact"],
 ] as const;
 
 const PUBLIC_PAGES = [
   { path: "/about", nav: "About", h1: /^About /, title: /^About .+ \| Peak Form Training$/ },
-  { path: "/services", nav: "Services", h1: "Services and pricing", title: /^Services and pricing \| / },
   { path: "/contact", nav: "Contact", h1: "Get in touch", title: /^Contact \| / },
 ] as const;
 
@@ -384,12 +381,6 @@ for (const { path, nav, h1, title } of PUBLIC_PAGES) {
 }
 
 test.describe("public page content and links", () => {
-  test("services lists every service and a free-consult call to action to /contact", async ({ page }) => {
-    await page.goto("/services");
-    await expect(page.locator(".feature-card")).toHaveCount(3);
-    await expect(page.getByRole("link", { name: "Book a free consult" }).first()).toHaveAttribute("href", "/contact");
-  });
-
   test("contact has real mailto and tel links and a form that composes a mailto (no backend)", async ({ page }) => {
     await page.goto("/contact");
     const main = page.locator("main#main-content");
@@ -586,7 +577,6 @@ test.describe("colour contrast of controls axe cannot fully judge", () => {
     await page.goto("/book");
     const row = page.getByRole("button", { name: /Park Studio/ });
     expect(await contrastRatio(row.locator(".slot-time"))).toBeGreaterThanOrEqual(4.5);
-    expect(await contrastRatio(row.locator(".slot-detail"))).toBeGreaterThanOrEqual(4.5);
     await row.click();
     const dialog = page.getByRole("dialog", { name: /^Book your session on/ });
     await expect(dialog).toBeVisible();
@@ -614,7 +604,6 @@ test.describe("colour contrast of controls axe cannot fully judge", () => {
     const row = page.getByRole("button", { name: /Park Studio/ });
     await row.hover();
     expect(await contrastRatio(row.locator(".slot-time"))).toBeGreaterThanOrEqual(4.5);
-    expect(await contrastRatio(row.locator(".slot-detail"))).toBeGreaterThanOrEqual(4.5);
     await row.click();
     const booking = page.getByRole("dialog", { name: /^Book your session on/ });
     for (const name of ["No, go back", "Yes, book this session"]) {
