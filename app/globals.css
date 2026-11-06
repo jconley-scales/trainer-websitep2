@@ -427,10 +427,6 @@ button.slot-row:hover:not(:disabled) {
   color: var(--color-primary);
 }
 
-.slot-detail {
-  font-size: var(--font-large);
-}
-
 /* ==========================================================================
    Marketing site (public pages)
    ========================================================================== */
@@ -669,40 +665,6 @@ button.button--accent:hover:not(:disabled) {
   padding: 0.75rem 1.75rem;
   border-radius: var(--radius);
   font-size: 1.3rem;
-}
-
-/* Service cards */
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  gap: 1.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Service panels: a flat step in tone, no border or shadow. */
-.feature-card {
-  display: flex;
-  flex-direction: column;
-  padding: 2rem;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.feature-card h3 {
-  margin: 0 0 0.75rem;
-  font-size: 1.6rem;
-}
-
-.feature-card p {
-  margin: 0 0 1rem;
-}
-
-.feature-card .feature-price {
-  margin: auto 0 0;
-  color: var(--color-accent);
-  font-weight: 700;
 }
 
 /* About */
@@ -1066,8 +1028,7 @@ button,
   background: var(--color-accent);
 }
 
-.slot-row.is-selected .slot-time,
-.slot-row.is-selected .slot-detail {
+.slot-row.is-selected .slot-time {
   color: var(--color-on-accent);
 }
 

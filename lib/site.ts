@@ -23,31 +23,10 @@ export const SITE = {
     "Your first consultation is free. Tell me a little about yourself and what you would like to achieve, and there is no obligation at all.",
   philosophy:
     "Small, steady steps beat big, risky leaps. You will always know what we are doing and why, and you are always in charge of how hard we push.",
-  services: [
-    {
-      title: "One-to-one training",
-      blurb:
-        "A private hour with me, planned around your body, your goals and your pace. Strength, balance and mobility, all with clear, patient coaching.",
-      price: "From $70 per session",
-    },
-    {
-      title: "Starter program",
-      blurb:
-        "New to exercise? Six sessions to learn the basics safely, build confidence and leave you with a simple routine you can keep up.",
-      price: "From $390 for six sessions",
-    },
-    {
-      title: "Small-group sessions",
-      blurb:
-        "Train with two or three friendly faces at a similar level. Good company, shared encouragement and a lower price per person.",
-      price: "From $35 per person",
-    },
-  ],
 } as const;
 
 export const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
-  { href: "/services", label: "Services" },
   { href: "/contact", label: "Contact" },
 ] as const;

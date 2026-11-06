@@ -248,7 +248,6 @@ export function BookingCalendar() {
                   }}
                 >
                   <span className="slot-time">{formatTimeRange(slot.startsAt, slot.endsAt)}</span>
-                  <span className="slot-detail">60-minute one-to-one session</span>
                 </button>
               </li>
             ))}
