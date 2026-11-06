@@ -42,3 +42,15 @@ export function formatTime(iso: string): string {
 export function formatTimeRange(startIso: string, endIso: string): string {
   return `${formatTime(startIso)} to ${formatTime(endIso)}`;
 }
+
+const usdFormat = new Intl.NumberFormat(LOCALE, {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
+});
+
+/** "$85", "$1,050", "$76.67": whole dollars drop the cents. */
+export function formatUsd(amount: number): string {
+  return usdFormat.format(amount);
+}

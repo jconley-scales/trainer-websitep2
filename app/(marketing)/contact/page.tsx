@@ -5,8 +5,7 @@ import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description:
-    "Book your free first consultation. Email, call or send a message and we will find a time that suits you.",
+  description: `Send ${SITE.trainer} a message about personal training in the Burlington, Vermont area. ${SITE.assessmentNote}`,
 };
 
 export default function ContactPage() {

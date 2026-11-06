@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: `About ${SITE.trainerFirstName}`,
-  description: `Meet ${SITE.trainer}: ${SITE.credentials}. Gentle, one-to-one personal training paced for you.`,
+  description: `Meet ${SITE.trainer}: former professional basketball player, ACE-certified personal trainer and senior fitness specialist in the Burlington, Vermont area.`,
 };
 
 export default function AboutPage() {

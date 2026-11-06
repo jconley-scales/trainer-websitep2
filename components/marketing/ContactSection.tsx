@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { buildMailto } from "@/lib/contact";
 import { SITE } from "@/lib/site";
 import { ContactForm } from "./ContactForm";
 import { sectionClass, titleClass, type SectionProps } from "./types";
 
 /**
  * Contact. "preview" is the home-page call to action that links to the contact
- * page; "full" has real email and phone links plus a message form that opens the
- * visitor's email app (no backend).
+ * page; "full" is the message form, which emails the trainer from the server.
  */
 export function ContactSection({
   headingLevel = "h2",
@@ -16,51 +14,36 @@ export function ContactSection({
   page = false,
 }: SectionProps) {
   const Heading = headingLevel;
-  const preview = variant === "preview";
-  const mailto = buildMailto({ to: SITE.email, subject: "Free consultation" });
-  return (
-    <>
-      <section
-        className={sectionClass(tone)}
-        aria-labelledby={page ? "page-title" : "contact-title"}
-      >
+  if (variant === "preview") {
+    return (
+      <section className={sectionClass(tone)} aria-labelledby="contact-title">
         <div className="wrap contact-box">
-          {page ? null : (
-            <>
-              <Heading id="contact-title" className={titleClass(headingLevel)}>
-                {preview ? "Let’s have a chat" : "Get in touch"}
-              </Heading>
-              <p className="section-intro">{SITE.contactIntro}</p>
-            </>
-          )}
+          <Heading id="contact-title" className={titleClass(headingLevel)}>
+            Connect and get fit with My Older Fitness
+          </Heading>
+          <p className="section-intro">{SITE.contactIntro}</p>
           <div className="hero-actions contact-actions">
-            {preview ? (
-              <Link className="button button--accent button--lg" href="/contact">
-                Get in touch<span className="visually-hidden"> with {SITE.trainerFirstName}</span>
-              </Link>
-            ) : (
-              <a className="button button--accent button--lg" href={mailto}>
-                Email {SITE.trainerFirstName}
-              </a>
-            )}
-            <a className="button button-secondary button--lg" href={`tel:${SITE.phoneHref}`}>
-              Call {SITE.phone}
-            </a>
+            <Link className="button button--accent button--lg" href="/contact">
+              Get in touch<span className="visually-hidden"> with {SITE.trainerFirstName}</span>
+            </Link>
           </div>
-          {preview ? null : (
-            <p className="section-note">
-              {SITE.email} &middot; {SITE.phone}
-            </p>
-          )}
         </div>
       </section>
-      {preview ? null : (
-        <section className="section section--alt">
-          <div className="wrap">
-            <ContactForm />
-          </div>
-        </section>
-      )}
-    </>
+    );
+  }
+  return (
+    <section
+      className={sectionClass(tone)}
+      aria-labelledby={page ? "page-title" : "contact-title"}
+    >
+      <div className="wrap">
+        {page ? null : (
+          <Heading id="contact-title" className={titleClass(headingLevel)}>
+            Get in touch
+          </Heading>
+        )}
+        <ContactForm />
+      </div>
+    </section>
   );
 }
