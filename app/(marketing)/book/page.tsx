@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { BookingCalendar } from "@/components/marketing/BookingCalendar";
-import Link from "next/link";
-import { PageHeader } from "@/components/marketing/PageHeader";
+import { BookingFlow } from "@/components/marketing/BookingFlow";
 import { formatUsd } from "@/lib/format";
 import { SITE } from "@/lib/site";
 
@@ -21,22 +19,5 @@ export const metadata: Metadata = {
 };
 
 export default function BookPage() {
-  return (
-    <>
-      <PageHeader
-        title="Book a session"
-        lead="Pick a day and time that suits you. We will sort out the details together once you have booked."
-      />
-      <section className="section" aria-labelledby="page-title">
-        <div className="wrap">
-          <p className="booking-certs">{SITE.certifiedBy}</p>
-          <p className="booking-price-note">
-            {priceNote}.{" "}
-            <Link href="/pricing">See pricing</Link>
-          </p>
-          <BookingCalendar />
-        </div>
-      </section>
-    </>
-  );
+  return <BookingFlow certifiedBy={SITE.certifiedBy} priceNote={priceNote} />;
 }
