@@ -1,22 +1,40 @@
 import { DISPLAY_TIME_ZONE } from "@/lib/format";
 
 /**
- * PLACEHOLDER availability for the public booking page.
+ * Availability for the public booking page.
  *
- * Until the gym's real schedule is wired up, bookable times are generated here:
- * every Mon/Wed/Fri over the next few weeks, at 9:00 and 10:30 in the gym's
- * display time zone (see DISPLAY_TIME_ZONE in lib/format.ts). Replace WEEKDAYS,
- * TIMES and SESSION_MINUTES with the real schedule when it is known.
+ * Bookable times are generated here from the trainer's weekly schedule, in the
+ * gym's display time zone (see DISPLAY_TIME_ZONE in lib/format.ts). There is
+ * one instructor, so each time takes one booking.
+ *
+ * Sessions are 1 hour, and start times are spaced 90 minutes apart so the
+ * instructor always has a 30-minute break to travel to the next location:
+ * - Thursday: 8:00 and 9:30
+ * - Saturday and Sunday: 8:00, 9:30, 11:00, 12:30, 2:00 and 3:30 (open until 5pm)
  *
  * Each slot's `startsAt`/`endsAt` are real UTC instants, so the time the client
  * picks is stored unambiguously; the labels are already in the gym's zone.
  */
 
-/** 0 = Sunday … 6 = Saturday. Placeholder: Mon, Wed, Fri. */
-const WEEKDAYS = [1, 3, 5];
-/** Local clock times (gym zone), 24h. */
-const TIMES = ["09:00", "10:30"];
 const SESSION_MINUTES = 60;
+/** Travel time between sessions, so the instructor can reach the next location. */
+const BREAK_MINUTES = 30;
+
+/** Session start times (gym zone, 24h), every SESSION_MINUTES + BREAK_MINUTES from `first`. */
+function startTimes(first: string, count: number): string[] {
+  const [h, m] = first.split(":").map(Number);
+  return Array.from({ length: count }, (_, i) => {
+    const total = h * 60 + m + i * (SESSION_MINUTES + BREAK_MINUTES);
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  });
+}
+
+/** Start times by weekday (0 = Sunday … 6 = Saturday). Days not listed are closed. */
+const SCHEDULE: Partial<Record<number, string[]>> = {
+  4: startTimes("08:00", 2), // Thursday: 8:00, 9:30
+  6: startTimes("08:00", 6), // Saturday: 8:00 … 15:30 (ends 16:30)
+  0: startTimes("08:00", 6), // Sunday: same as Saturday
+};
 /** How many days ahead to offer. */
 const DAYS_AHEAD = 28;
 
@@ -118,10 +136,11 @@ export function availableDays(now: Date): AvailableDay[] {
   for (let offset = 0; offset <= DAYS_AHEAD; offset++) {
     const dayInstant = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
     const { weekday, year, month, day, date } = zonedParts(dayInstant);
-    if (!WEEKDAYS.includes(weekday)) continue;
+    const times = SCHEDULE[weekday];
+    if (!times) continue;
 
     const slots: AvailableSlot[] = [];
-    for (const time of TIMES) {
+    for (const time of times) {
       const [h, m] = time.split(":").map(Number);
       const startsAt = zonedTimeToUtc(year, month, day, h, m);
       if (startsAt.getTime() <= now.getTime()) continue; // future only
