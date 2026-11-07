@@ -297,7 +297,7 @@ test.describe("/ (public home page)", () => {
       await expect(main.getByRole("link", { name })).toHaveAttribute("href", href);
     }
     // Every package price is on the home page; the photo grid has every photo.
-    for (const price of ["$85", "$400", "$750", "$1,050"]) {
+    for (const price of ["$85", "$400", "$750", "$1,050", "$120", "$425", "$785", "$1,125"]) {
       await expect(main.locator(".price-total", { hasText: price })).toHaveCount(1);
     }
     await expect(main.locator(".gallery-button")).toHaveCount(5);
@@ -433,6 +433,7 @@ test.describe("public page content and links", () => {
     const note = page.locator(".booking-price-note");
     await expect(note).toContainText("$70");
     await expect(note).toContainText("$85");
+    await expect(note).toContainText("$120");
     await expect(note.getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
   });
 

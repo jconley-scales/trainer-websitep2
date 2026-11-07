@@ -43,15 +43,28 @@ describe("dedicated public pages", () => {
     expect(a.querySelector("img.about-photo")?.getAttribute("alt")).toBeTruthy();
   });
 
-  it("pricing shows every package with its per-session cost and the assessment note", () => {
+  it("pricing shows each labelled group with every package, its per-session cost and the assessment note", () => {
     const doc = render(<PricingPage />);
     const text = doc.body.textContent ?? "";
     expect(text).toContain(SITE.assessmentNote);
-    expect(doc.querySelectorAll(".price-card")).toHaveLength(SITE.prices.length);
-    for (const { sessions, total } of SITE.prices) {
-      expect(text).toContain(formatUsd(total));
-      if (sessions > 1) expect(text).toContain(`${formatUsd(total / sessions)} per session`);
-    }
+    const groups = [...doc.querySelectorAll(".price-group")];
+    expect(groups).toHaveLength(SITE.pricing.length);
+    SITE.pricing.forEach((group, i) => {
+      const el = groups[i];
+      expect(el.querySelector(".price-group-title")?.textContent).toBe(group.title);
+      expect(el.querySelectorAll(".price-card")).toHaveLength(group.prices.length);
+      const groupText = el.textContent ?? "";
+      for (const { sessions, total } of group.prices) {
+        expect(groupText).toContain(formatUsd(total));
+        if (sessions > 1) expect(groupText).toContain(`${formatUsd(total / sessions)} per session`);
+      }
+      if (group.firstSession !== undefined) {
+        expect(groupText).toContain(`First session ${formatUsd(group.firstSession)}`);
+      }
+    });
+    expect(text).toContain("1-on-1 training");
+    expect(text).toContain("Partner training");
+    expect(text).toContain("First session $85");
   });
 
   it("testimonials shows every quote in full with the client's name", () => {
@@ -73,7 +86,8 @@ describe("dedicated public pages", () => {
   it("booking shows the per-session price range and links to pricing", () => {
     const doc = render(<BookPage />);
     const note = doc.querySelector(".booking-price-note");
-    expect(note?.textContent).toContain("$70 to $85");
+    expect(note?.textContent).toContain("1-on-1 training $70 to $85 each");
+    expect(note?.textContent).toContain("partner training $75 to $120 each");
     expect(note?.querySelector('a[href="/pricing"]')).not.toBeNull();
   });
 });
@@ -90,7 +104,9 @@ describe("home page", () => {
     expect(doc.body.textContent).not.toContain(SITE.about[2]);
     expect(doc.body.textContent).not.toContain(SITE.philosophy);
     // Every package price and the assessment note.
-    for (const { total } of SITE.prices) expect(doc.body.textContent).toContain(formatUsd(total));
+    for (const { total } of SITE.pricing.flatMap((g) => g.prices)) {
+      expect(doc.body.textContent).toContain(formatUsd(total));
+    }
     expect(doc.body.textContent).toContain(SITE.assessmentNote);
     // Only the first testimonial.
     expect(doc.querySelectorAll(".testimonial-card")).toHaveLength(1);
@@ -118,5 +134,10 @@ describe("prices", () => {
     expect(formatUsd(85)).toBe("$85");
     expect(formatUsd(1050)).toBe("$1,050");
     expect(formatUsd(80)).toBe("$80");
+  });
+
+  it("shows both cent digits when there are cents", () => {
+    expect(formatUsd(78.5)).toBe("$78.50");
+    expect(formatUsd(230 / 3)).toBe("$76.67");
   });
 });

@@ -50,7 +50,14 @@ const usdFormat = new Intl.NumberFormat(LOCALE, {
   minimumFractionDigits: 0,
 });
 
-/** "$85", "$1,050", "$76.67": whole dollars drop the cents. */
+const usdCentsFormat = new Intl.NumberFormat(LOCALE, {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** "$85", "$1,050", "$78.50": whole dollars drop the cents; otherwise both cent digits show. */
 export function formatUsd(amount: number): string {
-  return usdFormat.format(amount);
+  return (Number.isInteger(amount) ? usdFormat : usdCentsFormat).format(amount);
 }

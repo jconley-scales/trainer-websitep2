@@ -6,7 +6,7 @@ import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: `Personal training session prices with ${SITE.trainer}: single sessions and 5, 10 and 15 session packages. ${SITE.assessmentNote}`,
+  description: `Personal training session prices with ${SITE.trainer}: 1-on-1 and partner training, as single sessions or 5, 10 and 15 session packages. ${SITE.assessmentNote}`,
 };
 
 export default function PricingPage() {

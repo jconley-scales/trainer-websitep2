@@ -31,13 +31,42 @@ export const SITE = {
   assessmentNote: "Your first session includes a 15-minute assessment.",
   contactIntro:
     "Tell me a little about yourself and what you would like to achieve, and I will get back to you. Your first session includes a 15-minute assessment, so we start at exactly the right level for you.",
-  /** Session packages. Per-session cost is derived, not stored. */
-  prices: [
-    { sessions: 1, total: 85 },
-    { sessions: 5, total: 400 },
-    { sessions: 10, total: 750 },
-    { sessions: 15, total: 1050 },
-  ],
+  /**
+   * Session packages, one group per kind of training. Per-session cost is
+   * derived, not stored. `firstSession` is an introductory price for a
+   * group's very first single session, shown on its 1-session card.
+   */
+  pricing: [
+    {
+      id: "one-on-one",
+      title: "1-on-1 training",
+      intro: "Just you and your trainer.",
+      prices: [
+        { sessions: 1, total: 85 },
+        { sessions: 5, total: 400 },
+        { sessions: 10, total: 750 },
+        { sessions: 15, total: 1050 },
+      ],
+    },
+    {
+      id: "partner",
+      title: "Partner training",
+      intro: "Train with a partner. Prices cover both of you.",
+      firstSession: 85,
+      prices: [
+        { sessions: 1, total: 120 },
+        { sessions: 5, total: 425 },
+        { sessions: 10, total: 785 },
+        { sessions: 15, total: 1125 },
+      ],
+    },
+  ] as {
+    id: string;
+    title: string;
+    intro: string;
+    firstSession?: number;
+    prices: { sessions: number; total: number }[];
+  }[],
   /** Clients' own words, exactly as published on the original site. The first is the home-page preview. */
   testimonials: [
     {

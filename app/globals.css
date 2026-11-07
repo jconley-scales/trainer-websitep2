@@ -742,6 +742,20 @@ button.button--accent:hover:not(:disabled) {
 }
 
 /* Pricing */
+.price-group + .price-group {
+  margin-top: 3rem;
+}
+
+.price-group-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+}
+
+.price-group-intro {
+  margin: 0 0 1.25rem;
+  color: var(--color-text-muted);
+}
+
 .price-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
@@ -783,10 +797,14 @@ button.button--accent:hover:not(:disabled) {
   max-width: 40rem;
   margin: 0 0 2rem;
   font-size: var(--font-large);
+  font-style: italic;
 }
 
+/* Upright and unbroken so the link stands apart from the italic price text. */
 .booking-price-note a {
   color: var(--color-primary);
+  font-style: normal;
+  white-space: nowrap;
 }
 
 /* Photo grid and the larger-photo dialog */
