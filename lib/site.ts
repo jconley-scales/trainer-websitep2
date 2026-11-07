@@ -22,12 +22,15 @@ export const SITE = {
   philosophy:
     "It is never too late to get stronger. Whatever your age or starting point, you can feel steadier and more capable in daily life, and I will encourage you every step of the way.",
   certifications: [
-    "ACE Personal Trainer",
     "ACE Senior Fitness Specialist",
+    "ACE Certified Personal Trainer",
+    "NASM Corrective Exercise Specialist",
+    "ACE Weight Management Specialist",
     "ACE Group Fitness Instructor",
-    "NASM Corrective Exercise",
-    "ACE Weight Management",
+    "Certified INSANITY Instructor",
   ],
+  /** Short trust line for places too small for the full certification list. */
+  certifiedBy: "Certified by ACE & NASM",
   assessmentNote: "Your first session includes a 15-minute assessment.",
   contactIntro:
     "Tell me a little about yourself and what you would like to achieve, and I will get back to you. Your first session includes a 15-minute assessment, so we start at exactly the right level for you.",

@@ -40,6 +40,9 @@ describe("dedicated public pages", () => {
     expect(a.body.textContent).toContain(SITE.philosophy);
     const certs = [...a.querySelectorAll(".cert-list li")].map((li) => li.textContent);
     expect(certs).toEqual([...SITE.certifications]);
+    expect(certs).toHaveLength(6);
+    expect(certs[0]).toBe("ACE Senior Fitness Specialist");
+    expect(certs.at(-1)).toBe("Certified INSANITY Instructor");
     expect(a.querySelector("img.about-photo")?.getAttribute("alt")).toBeTruthy();
   });
 
@@ -90,6 +93,11 @@ describe("dedicated public pages", () => {
     expect(note?.textContent).toContain("partner training $75 to $120 each");
     expect(note?.querySelector('a[href="/pricing"]')).not.toBeNull();
   });
+
+  it("booking reassures visitors with the trainer's certifying bodies", () => {
+    const doc = render(<BookPage />);
+    expect(doc.querySelector(".booking-certs")?.textContent).toBe("Certified by ACE & NASM");
+  });
 });
 
 describe("home page", () => {
@@ -108,6 +116,10 @@ describe("home page", () => {
       expect(doc.body.textContent).toContain(formatUsd(total));
     }
     expect(doc.body.textContent).toContain(SITE.assessmentNote);
+    // Every certification, under a subheading below the section's h2.
+    const certs = [...doc.querySelectorAll(".cert-list li")].map((li) => li.textContent);
+    expect(certs).toEqual([...SITE.certifications]);
+    expect(doc.querySelector("h3.about-subtitle")?.textContent).toBe("Certifications");
     // Only the first testimonial.
     expect(doc.querySelectorAll(".testimonial-card")).toHaveLength(1);
   });

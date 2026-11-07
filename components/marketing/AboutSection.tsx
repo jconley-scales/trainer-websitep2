@@ -5,8 +5,8 @@ import { SITE } from "@/lib/site";
 import { sectionClass, titleClass, type SectionProps } from "./types";
 
 /**
- * About the trainer. "preview" is the short home-page "about me": credentials
- * and the first paragraph with a "Read more" link. "full" has the whole bio,
+ * About the trainer. "preview" is the short home-page "about me": credentials,
+ * the first paragraph, every certification and a "Read more" link. "full" has the whole bio,
  * philosophy and every certification.
  */
 export function AboutSection({
@@ -43,24 +43,36 @@ export function AboutSection({
             <p key={paragraph}>{paragraph}</p>
           ))}
           {preview ? (
-            <p className="section-more">
-              <Link className="button button-secondary" href="/about">
-                Read more<span className="visually-hidden"> about {SITE.trainerFirstName}</span>
-              </Link>
-            </p>
+            <>
+              <CertList heading="h3" />
+              <p className="section-more">
+                <Link className="button button-secondary" href="/about">
+                  Read more<span className="visually-hidden"> about {SITE.trainerFirstName}</span>
+                </Link>
+              </p>
+            </>
           ) : (
             <>
               <p className="about-philosophy">{SITE.philosophy}</p>
-              <h2 className="about-subtitle">Certifications</h2>
-              <ul className="cert-list">
-                {SITE.certifications.map((cert) => (
-                  <li key={cert}>{cert}</li>
-                ))}
-              </ul>
+              <CertList heading="h2" />
             </>
           )}
         </div>
       </div>
     </section>
+  );
+}
+
+/** Every certification, under its own subheading one level below the section. */
+function CertList({ heading: Heading }: { heading: "h2" | "h3" }) {
+  return (
+    <>
+      <Heading className="about-subtitle">Certifications</Heading>
+      <ul className="cert-list">
+        {SITE.certifications.map((cert) => (
+          <li key={cert}>{cert}</li>
+        ))}
+      </ul>
+    </>
   );
 }

@@ -29,6 +29,7 @@ export default function BookPage() {
       />
       <section className="section" aria-labelledby="page-title">
         <div className="wrap">
+          <p className="booking-certs">{SITE.certifiedBy}</p>
           <p className="booking-price-note">
             {priceNote}.{" "}
             <Link href="/pricing">See pricing</Link>
