@@ -16,7 +16,7 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-type Step = "idle" | "submitting" | "success" | "error";
+type Step = "idle" | "submitting" | "error";
 
 function monthKey(date: string): string {
   return date.slice(0, 7); // YYYY-MM
@@ -41,7 +41,9 @@ async function loadAvailableDays(): Promise<AvailableDay[]> {
   return withoutTaken(availableDays(new Date()), new Set(taken));
 }
 
-export function BookingCalendar() {
+/** `onBooked` gets the requested time once the request has gone through; the
+ *  page then replaces itself with the thank-you. */
+export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) => void }) {
   // Availability is computed on the client (current time), so the page itself
   // stays static. The server action re-validates the chosen slot on submit.
   const [days, setDays] = useState<AvailableDay[] | null>(null);
@@ -85,22 +87,6 @@ export function BookingCalendar() {
     );
   }
 
-  if (step === "success" && selectedSlot) {
-    return (
-      <div className="booking-success" role="status">
-        <h2 className="section-title">Thank you — your request is in</h2>
-        <p>
-          You asked to book <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
-          <strong>{formatTimeRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>.
-        </p>
-        <p>
-          This is a request, not a confirmed booking yet — we will email or call you to confirm. If you
-          need to change anything, just <a href="/contact">get in touch</a>.
-        </p>
-      </div>
-    );
-  }
-
   const slotsByDate = new Map(days.map((day) => [day.date, day.slots]));
   const months = [...new Set(days.map((day) => monthKey(day.date)))]; // already sorted
   const safeMonthIndex = Math.min(monthIndex, months.length - 1);
@@ -124,7 +110,7 @@ export function BookingCalendar() {
       endsAt: selectedSlot.endsAt,
     });
     if (result.ok) {
-      setStep("success");
+      onBooked(selectedSlot);
     } else if (result.taken) {
       // Someone else got there first: show the up-to-date times and say so.
       const fresh = await loadAvailableDays();
