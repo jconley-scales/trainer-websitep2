@@ -724,6 +724,12 @@ button.button--accent:hover:not(:disabled) {
   font-size: var(--font-heading);
 }
 
+.booking-certs {
+  margin: 0 0 0.5rem;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
 .cert-list {
   display: grid;
   gap: 0.5rem;
