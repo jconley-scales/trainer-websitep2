@@ -702,8 +702,8 @@ button.button--accent:hover:not(:disabled) {
   border-radius: var(--radius-lg);
 }
 
-/* On the About page the text runs long, so the photo stays at the top. */
-.about-grid:has(.cert-list) {
+/* The full About page bio runs long, so its photo stays at the top. */
+.about-grid:has(.about-philosophy) {
   align-items: start;
 }
 
