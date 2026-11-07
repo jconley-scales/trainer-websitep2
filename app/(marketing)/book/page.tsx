@@ -5,9 +5,14 @@ import { PageHeader } from "@/components/marketing/PageHeader";
 import { formatUsd } from "@/lib/format";
 import { SITE } from "@/lib/site";
 
-const perSession = SITE.prices.map((p) => p.total / p.sessions);
-const lowest = Math.min(...perSession);
-const highest = Math.max(...perSession);
+/** Each training group's per-session range, e.g. "1-on-1 training $70 to $85 each". */
+const ranges = SITE.pricing.map((group) => {
+  const perSession = group.prices.map((p) => p.total / p.sessions);
+  const lowest = formatUsd(Math.min(...perSession));
+  const highest = formatUsd(Math.max(...perSession));
+  return `${group.title.toLowerCase()} ${lowest} to ${highest} each`;
+});
+const priceNote = ranges.join(", ").replace(/^./, (c) => c.toUpperCase());
 
 export const metadata: Metadata = {
   title: "Book a session",
@@ -25,7 +30,7 @@ export default function BookPage() {
       <section className="section" aria-labelledby="page-title">
         <div className="wrap">
           <p className="booking-price-note">
-            Sessions from {formatUsd(lowest)} to {formatUsd(highest)} each.{" "}
+            {priceNote}.{" "}
             <Link href="/pricing">See pricing</Link>
           </p>
           <BookingCalendar />
