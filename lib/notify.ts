@@ -8,7 +8,8 @@ const oneLine = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
 
 /**
  * The SMTP transport and the trainer's address, or null when email is not
- * configured. Shared by booking notifications and the contact form.
+ * configured. The privacy page names the email provider (`SITE.privacy` in
+ * lib/site.ts): update it if the SMTP provider changes. Shared by booking notifications and the contact form.
  */
 function trainerMailer() {
   const host = process.env.SMTP_HOST;

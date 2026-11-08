@@ -958,6 +958,42 @@ button.button--accent:hover:not(:disabled) {
   color: var(--color-text-muted);
 }
 
+/* "How we use your details" beside the booking and contact forms. A plain
+   in-text link would be too small a target, so it is a 48px-tall flex box. */
+.privacy-note {
+  margin: 0;
+}
+
+.privacy-note a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-target);
+}
+
+/* Privacy page (/privacy) */
+.privacy {
+  max-width: var(--content-width);
+}
+
+.privacy-updated {
+  margin: 0 0 2rem;
+  color: var(--color-text-muted);
+}
+
+.privacy-section + .privacy-section {
+  margin-top: 2.5rem;
+}
+
+.privacy-heading {
+  margin: 0 0 0.75rem;
+  font-size: var(--font-heading);
+  line-height: 1.2;
+}
+
+.privacy-section li + li {
+  margin-top: 0.5rem;
+}
+
 /* Footer */
 .site-footer {
   padding-block: 3rem 1.5rem;

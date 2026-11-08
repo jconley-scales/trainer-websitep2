@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import BookPage from "@/app/(marketing)/book/page";
 import { SITE } from "@/lib/site";
 
@@ -8,7 +8,18 @@ vi.mock("@/app/(marketing)/book/actions", () => ({
   submitBooking: vi.fn(async () => ({ ok: true })),
 }));
 
+afterEach(cleanup);
+
 describe("booking a session", () => {
+  it("links to the privacy page from the details form", async () => {
+    render(<BookPage />);
+    fireEvent.click((await screen.findAllByRole("button", { name: /available$/ }))[0]);
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".slot-row")!);
+    const form = screen.getByRole("button", { name: "Request this session" }).closest("form")!;
+    const link = within(form).getByRole("link", { name: "How we use your details" });
+    expect(link).toHaveAttribute("href", "/privacy");
+  });
+
   it("replaces the whole booking page with the thank-you once the request is in", async () => {
     render(<BookPage />);
 

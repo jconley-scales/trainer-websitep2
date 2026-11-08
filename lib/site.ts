@@ -101,6 +101,89 @@ export const SITE = {
       ],
     },
   ],
+  /**
+   * The privacy page (/privacy). Plain English, written for visitors.
+   * Anything starting "[PLACEHOLDER" is a fact only the trainer can confirm:
+   * replace it before going live (search this file for PLACEHOLDER).
+   */
+  privacy: {
+    updated: "November 8, 2026",
+    /** Shown beside the booking and contact forms, linking here. */
+    linkLabel: "How we use your details",
+    lead: "What happens to the details you send me, in plain English.",
+    sections: [
+      {
+        id: "privacy-collect",
+        heading: "What I collect, and why",
+        paragraphs: [
+          "I only collect what you choose to send me through this website, apart from the basic visit logs every web host keeps (such as your device’s internet address):",
+        ],
+        items: [
+          "When you request a session: your name, email address, phone number if you give one, the time you picked, and any note you add.",
+          "When you send a message: your name, email address, phone number if you give one, and your message.",
+        ],
+        afterList: [
+          "I use these details only to arrange and confirm your sessions and to reply to you. That is all.",
+          "This site has no advertising or tracking cookies, and it does not follow you to other websites. It works the same whether or not your browser sends a “Do Not Track” signal.",
+        ],
+      },
+      {
+        id: "privacy-health",
+        heading: "Health details are up to you",
+        paragraphs: [
+          "You never have to share health details through this website. The note on a booking is optional, so share only what you’re comfortable sending. If there is something I should know before we start, we can talk it through at your first session.",
+        ],
+      },
+      {
+        id: "privacy-sharing",
+        heading: "Who else handles your details",
+        paragraphs: [
+          "A few trusted services help me run this website. They handle your details only to do that job for me:",
+        ],
+        items: [
+          "Supabase stores booking requests in a secure database.",
+          "Vercel hosts the website.",
+          // Update this line if the site's email provider (SMTP_* settings) changes.
+          "Gmail delivers the emails that tell me about new booking requests and messages, and keeps them in my inbox.",
+        ],
+        afterList: [
+          "I never sell your information, and I never share it with anyone for marketing.",
+        ],
+      },
+      {
+        id: "privacy-keeping",
+        heading: "How long I keep your details",
+        paragraphs: [
+          "Messages from the contact form are not stored on this website. They arrive in my email, and I keep them only as long as I need them to help you.",
+          "[PLACEHOLDER for Jervaughn to confirm: how long booking requests, and the emails about them, are kept before they are deleted, for example “I keep booking requests for two years after your last session, then delete them.”]",
+        ],
+      },
+      {
+        id: "privacy-choices",
+        heading: "Seeing or deleting your details",
+        paragraphs: [
+          "You can ask to see or delete the details I hold about you, or to correct anything that is wrong. Just send me a message through the contact form and tell me what you would like. I will take care of it and let you know when it is done.",
+        ],
+        cta: { href: "/contact", label: "Send Jervaughn a message" },
+      },
+      {
+        id: "privacy-changes",
+        heading: "If this page changes",
+        paragraphs: [
+          "If I change how I handle your details, I will update this page and the date at the top.",
+        ],
+      },
+    ] as {
+      id: string;
+      heading: string;
+      paragraphs: string[];
+      items?: string[];
+      /** Paragraphs that follow the bulleted list. */
+      afterList?: string[];
+      /** A button-styled link closing the section. */
+      cta?: { href: string; label: string };
+    }[],
+  },
 } as const;
 
 export const NAV_LINKS = [

@@ -405,6 +405,41 @@ for (const { path, nav, h1, title } of PUBLIC_PAGES) {
   });
 }
 
+test.describe("/privacy (public page, footer only)", () => {
+  test("own h1 and title, marked current in the footer, axe, keyboard, 48px targets, focus", async ({ page }) => {
+    await page.goto("/privacy");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your privacy");
+    await expect(page).toHaveTitle(/^Privacy \| /);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /\S/);
+    await expect(page.locator("main#main-content")).toHaveCount(1);
+    // Not in the main nav, so only the footer link is marked current.
+    await expect(page.locator('[aria-current="page"]')).toHaveCount(1);
+    await expect(
+      page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: "Privacy" }),
+    ).toHaveAttribute("aria-current", "page");
+    await expectNoSeriousViolations(page, "/privacy");
+    await expectKeyboardAndTargets(page, "/privacy");
+  });
+
+  test("phone width (375px): no horizontal scroll, controls still 48px", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/privacy");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, "page must not scroll sideways").toBeLessThanOrEqual(0);
+    await expectNoSeriousViolations(page, "/privacy (375px)");
+    await expectKeyboardAndTargets(page, "/privacy (375px)");
+  });
+
+  test("the contact form links to it", async ({ page }) => {
+    await page.goto("/contact");
+    await page.locator("main#main-content form").getByRole("link", { name: "How we use your details" }).click();
+    await expect(page).toHaveURL(/\/privacy$/);
+  });
+});
+
 test.describe("public page content and links", () => {
   test("contact publishes no email or phone, and the form posts to the server, never the URL", async ({ page }) => {
     await page.goto("/contact");

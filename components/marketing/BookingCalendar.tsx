@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { PrivacyNote } from "@/components/marketing/PrivacyNote";
 import { getTakenTimes, submitBooking } from "@/app/(marketing)/book/actions";
 import {
   availableDays,
@@ -251,6 +252,7 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
             Booking <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
             <strong>{formatTimeRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>.
           </p>
+          <PrivacyNote />
 
           {step === "error" ? (
             <p className="error-message" role="alert">

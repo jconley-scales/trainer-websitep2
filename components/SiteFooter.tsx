@@ -27,6 +27,11 @@ export function SiteFooter() {
                 Book a session
               </Link>
             </li>
+            <li>
+              <NavLink className="nav-link" href="/privacy">
+                Privacy
+              </NavLink>
+            </li>
           </ul>
         </nav>
       </div>

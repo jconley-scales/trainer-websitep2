@@ -5,7 +5,9 @@ import BookPage from "@/app/(marketing)/book/page";
 import ContactPage, { metadata as contactMeta } from "@/app/(marketing)/contact/page";
 import HomePage from "@/app/(marketing)/page";
 import PricingPage, { metadata as pricingMeta } from "@/app/(marketing)/pricing/page";
+import PrivacyPage, { metadata as privacyMeta } from "@/app/(marketing)/privacy/page";
 import TestimonialsPage, { metadata as testimonialsMeta } from "@/app/(marketing)/testimonials/page";
+import { SiteFooter } from "@/components/SiteFooter";
 import { formatUsd } from "@/lib/format";
 import { GALLERY } from "@/lib/photos";
 import { NAV_LINKS, SITE } from "@/lib/site";
@@ -23,6 +25,7 @@ describe("dedicated public pages", () => {
     ["pricing", PricingPage, pricingMeta, "Session prices"],
     ["testimonials", TestimonialsPage, testimonialsMeta, "What clients say"],
     ["contact", ContactPage, contactMeta, "Get in touch"],
+    ["privacy", PrivacyPage, privacyMeta, "Your privacy"],
   ] as const;
 
   it.each(pages)("%s renders exactly one h1 and exports metadata", (_name, Page, meta, h1) => {
@@ -86,6 +89,30 @@ describe("dedicated public pages", () => {
     expect(doc.querySelector('input[type="email"]')).not.toBeNull();
   });
 
+  it("contact links to the privacy page from inside the form", () => {
+    const doc = render(<ContactPage />);
+    const link = doc.querySelector('form a[href="/privacy"]');
+    expect(link?.textContent).toBe(SITE.privacy.linkLabel);
+  });
+
+  it("privacy explains what is collected, who sees it, how long it is kept and how to get it deleted", () => {
+    const doc = render(<PrivacyPage />);
+    const text = doc.body.textContent!.replace(/\s+/g, " ");
+    // What is collected, and why.
+    for (const item of ["name", "email", "phone", "note", "message"]) expect(text).toContain(item);
+    expect(text).toMatch(/arrange and confirm (your )?sessions/);
+    // Who it is shared with, and never sold.
+    for (const company of ["Supabase", "Vercel", "Gmail"]) expect(text).toContain(company);
+    expect(text).toMatch(/never sell/i);
+    // How long it is kept, and how to see or delete it.
+    expect(doc.querySelector("h2#privacy-keeping")?.textContent).toBeTruthy();
+    expect(text).toMatch(/see or delete/i);
+    expect(doc.querySelector('main a[href="/contact"], section a[href="/contact"]')).not.toBeNull();
+    // Health details are optional.
+    expect(text).toMatch(/health details/i);
+    expect(text).toMatch(/optional/i);
+  });
+
   it("booking shows the per-session price range and links to pricing", () => {
     const doc = render(<BookPage />);
     const note = doc.querySelector(".booking-price-note");
@@ -138,6 +165,14 @@ describe("home page", () => {
 describe("navigation links", () => {
   it("point at real routes, not anchors", () => {
     expect(NAV_LINKS.map((l) => l.href)).toEqual(["/", "/about", "/pricing", "/testimonials", "/contact"]);
+  });
+});
+
+describe("footer", () => {
+  it("links to the privacy page", () => {
+    const doc = render(<SiteFooter />);
+    const link = doc.querySelector('nav[aria-label="Footer"] a[href="/privacy"]');
+    expect(link?.textContent).toBe("Privacy");
   });
 });
 

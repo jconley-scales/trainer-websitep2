@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
+import { PrivacyNote } from "@/components/marketing/PrivacyNote";
 import { submitContactMessage } from "@/app/(marketing)/contact/actions";
 import { SITE } from "@/lib/site";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -61,6 +62,7 @@ export function ContactForm() {
         Ask a question or tell {SITE.trainerFirstName} about your goals. He will
         reply by email.
       </p>
+      <PrivacyNote />
       <div className="field">
         <label htmlFor="contact-name">Your name</label>
         <input
