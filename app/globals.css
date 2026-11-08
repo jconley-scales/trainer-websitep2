@@ -813,6 +813,9 @@ button.button--accent:hover:not(:disabled) {
 
 /* Upright and unbroken so the link stands apart from the italic price text. */
 .booking-price-note a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-target);
   color: var(--color-primary);
   font-style: normal;
   white-space: nowrap;
@@ -1217,6 +1220,10 @@ button,
 
 .booking-empty a,
 .booking-success a {
+  /* 48px-tall targets, like .privacy-note a, without breaking the sentence. */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-target);
   color: var(--color-primary);
 }
 
@@ -1272,8 +1279,8 @@ button,
 }
 
 .booking-day--off {
+  /* Muted, not faded: the date numbers stay readable (≈7.8:1). */
   color: var(--color-text-muted);
-  opacity: 0.55;
 }
 
 /* Days with an open session: an accent-outlined, tappable button. */
@@ -1284,18 +1291,22 @@ button,
   cursor: pointer;
 }
 
-.booking-day--open:hover {
+/* Out-ranks the global button:hover fill, which would match the light text. */
+.booking-day--open:hover:not(:disabled) {
+  border-color: var(--color-accent);
   background: var(--color-bg-tint);
 }
 
-.booking-day--open.is-selected {
+.booking-day--open.is-selected,
+.booking-day--open.is-selected:hover:not(:disabled) {
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: var(--color-on-accent);
 }
 
 /* Selected time row (reuses .slot-row); mark with more than colour via a check. */
-.slot-row.is-selected {
+.slot-row.is-selected,
+button.slot-row.is-selected:hover:not(:disabled) {
   border-color: var(--color-accent);
   background: var(--color-accent);
 }
