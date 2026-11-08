@@ -102,9 +102,9 @@ export const SITE = {
     },
   ],
   /**
-   * The privacy page (/privacy). Plain English, written for visitors.
-   * Anything starting "[PLACEHOLDER" is a fact only the trainer can confirm:
-   * replace it before going live (search this file for PLACEHOLDER).
+   * The privacy page (/privacy). Plain English, written for visitors. These
+   * are promises: if how data is kept or handled changes, update this copy
+   * and `updated`.
    */
   privacy: {
     updated: "November 8, 2026",
@@ -155,7 +155,7 @@ export const SITE = {
         heading: "How long I keep your details",
         paragraphs: [
           "Messages from the contact form are not stored on this website. They arrive in my email, and I keep them only as long as I need them to help you.",
-          "[PLACEHOLDER for Jervaughn to confirm: how long booking requests, and the emails about them, are kept before they are deleted, for example “I keep booking requests for two years after your last session, then delete them.”]",
+          "I keep booking requests, and the emails about them, while we’re working together and for up to two years after your last session. Then I delete them. If you’d like yours deleted sooner, just ask.",
         ],
       },
       {
