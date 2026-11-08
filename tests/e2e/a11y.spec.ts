@@ -693,7 +693,7 @@ test.describe("colour contrast of controls axe cannot fully judge", () => {
   });
 });
 
-test.describe("/admin confirm panel", () => {
+test.describe("/admin confirm and cancel panels", () => {
   const seeded = { bookingId: "", adminEmail: "", userId: "" };
 
   /**
@@ -808,5 +808,69 @@ test.describe("/admin confirm panel", () => {
     );
     await expect(result).toBeFocused();
     await expectNoSeriousViolations(page, "/admin (after confirming)");
+  });
+
+  test("open cancel panel: no browser pop-up, no serious axe violations, focus in and back, 48px targets, visible focus", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    // The old window.confirm() pop-up must be gone: fail if any dialog appears.
+    page.on("dialog", (dialog) => {
+      throw new Error(`Unexpected browser pop-up: ${dialog.message()}`);
+    });
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    const cancel = card.getByRole("button", { name: /^Cancel the booking for Jordan Tester/ });
+    await cancel.click();
+
+    const panel = card.getByRole("form", { name: /^Cancel Jordan's booking on .+ at .+\?$/ });
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("They'll get an email letting them know.");
+    await expect(panel.locator(".confirm-panel-question")).toBeFocused();
+
+    await expectNoSeriousViolations(page, "/admin (cancel panel)");
+
+    const expected = ["Reason (optional, included in the email)", "Yes, cancel and email Jordan", "Keep booking"];
+    for (const name of expected) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return {
+          label: (el as HTMLTextAreaElement).labels?.[0]?.textContent ?? el.textContent ?? "",
+          width: rect.width,
+          height: rect.height,
+          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
+        };
+      });
+      expect(stop.label.trim()).toBe(name);
+      expect(stop.height, `${name} height`).toBeGreaterThanOrEqual(48);
+      expect(stop.width, `${name} width`).toBeGreaterThanOrEqual(48);
+      expect(stop.outline, `${name} focus ring`).toBe(true);
+    }
+
+    // "Keep booking" closes the panel, returns focus to Cancel, and changes nothing.
+    await page.keyboard.press("Enter");
+    await expect(panel).toBeHidden();
+    await expect(cancel).toBeFocused();
+    await expect(card.locator(".status-badge")).toHaveText("New request");
+  });
+
+  test("cancelling a confirmed booking with a reason: it is cancelled and the result is announced", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    await card.getByRole("button", { name: /^Confirm the booking for Jordan Tester/ }).click();
+    await card.getByRole("button", { name: "Yes, confirm and email Jordan" }).click();
+    await expect(card.locator(".status-badge")).toHaveText("Confirmed");
+
+    await card.getByRole("button", { name: /^Cancel the booking for Jordan Tester/ }).click();
+    await card.getByLabel("Reason (optional, included in the email)").fill("I'm unwell this week, sorry.");
+    await card.getByRole("button", { name: "Yes, cancel and email Jordan" }).click();
+
+    await expect(card.locator(".status-badge")).toHaveText("Cancelled");
+    const result = card.locator(".notice-message, .warning-message");
+    await expect(result).toHaveText(
+      /^(Cancelled\. Jordan has been emailed\.|Cancelled, but the email to Jordan didn't send\. Please call or email them yourself\.)$/,
+    );
+    await expect(result).toBeFocused();
+    await expectNoSeriousViolations(page, "/admin (after cancelling)");
   });
 });

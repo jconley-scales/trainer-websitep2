@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { confirmBooking, setBookingStatus } from "./actions";
-import { CONFIRM_NOTE_MAX } from "./limits";
+import { cancelBooking, confirmBooking, setBookingStatus } from "./actions";
+import { CANCEL_REASON_MAX, CONFIRM_NOTE_MAX } from "./limits";
 
 type Status = "new" | "confirmed" | "cancelled";
 
@@ -16,7 +16,52 @@ const ACTIONS: Record<Status, { to: Status; label: string; className: string }[]
   cancelled: [{ to: "new", label: "Reopen", className: "button button-secondary" }],
 };
 
-/** What happened after confirming, shown under the buttons. */
+/** Confirming and cancelling both email the client, so each asks first in a panel. */
+type PanelKind = "confirmed" | "cancelled";
+
+/** What each panel says and does. `name` is the client's first name; `when` the day and time. */
+const PANELS: Record<
+  PanelKind,
+  {
+    question: (name: string, when: string) => string;
+    lead: string;
+    fieldLabel: (name: string) => string;
+    fieldHint?: string;
+    max: number;
+    submitLabel: (name: string) => string;
+    submitClassName: string;
+    backLabel: string;
+    done: string;
+    send: typeof confirmBooking;
+  }
+> = {
+  confirmed: {
+    question: (name, when) => `Confirm ${name}'s booking on ${when}?`,
+    lead: "They'll get a confirmation email.",
+    fieldLabel: (name) => `Note for ${name} (optional)`,
+    fieldHint: `Goes in the email only, and is not saved. For example, where to meet. Up to ${CONFIRM_NOTE_MAX} characters.`,
+    max: CONFIRM_NOTE_MAX,
+    submitLabel: (name) => `Yes, confirm and email ${name}`,
+    submitClassName: "button button--accent",
+    backLabel: "Not yet",
+    done: "Confirmed",
+    send: confirmBooking,
+  },
+  cancelled: {
+    question: (name, when) => `Cancel ${name}'s booking on ${when}?`,
+    lead: "They'll get an email letting them know.",
+    fieldLabel: () => "Reason (optional, included in the email)",
+    fieldHint: `Not saved. Up to ${CANCEL_REASON_MAX} characters.`,
+    max: CANCEL_REASON_MAX,
+    submitLabel: (name) => `Yes, cancel and email ${name}`,
+    submitClassName: "button button-danger",
+    backLabel: "Keep booking",
+    done: "Cancelled",
+    send: cancelBooking,
+  },
+};
+
+/** What happened after confirming or cancelling, shown under the buttons. */
 type Outcome = { kind: "emailed" | "not-emailed"; text: string };
 
 export function BookingStatusButtons({
@@ -28,80 +73,84 @@ export function BookingStatusButtons({
 }: {
   id: string;
   status: Status;
-  /** e.g. "Jordan Tester on Friday, October 23", for button labels and the cancel check. */
+  /** e.g. "Jordan Tester on Friday, October 23", for button labels. */
   who: string;
-  /** e.g. "Jordan", for the confirm panel. */
+  /** e.g. "Jordan", for the confirm and cancel panels. */
   clientFirstName: string;
-  /** e.g. "Friday, October 23 at 9:00 AM", for the confirm panel. */
+  /** e.g. "Friday, October 23 at 9:00 AM", for the confirm and cancel panels. */
   when: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [note, setNote] = useState("");
+  const [open, setOpen] = useState<PanelKind | null>(null);
+  const [text, setText] = useState("");
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const questionId = useId();
-  const noteId = useId();
-  const noteHintId = useId();
+  const fieldId = useId();
+  const hintId = useId();
   const questionRef = useRef<HTMLParagraphElement>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const buttonRefs = useRef<Partial<Record<Status, HTMLButtonElement | null>>>({});
   const outcomeRef = useRef<HTMLParagraphElement>(null);
 
   // Move focus into the panel when it opens, so a keyboard or screen reader user lands on the question.
   useEffect(() => {
-    if (confirming) questionRef.current?.focus();
-  }, [confirming]);
+    if (open) questionRef.current?.focus();
+  }, [open]);
 
-  // After confirming, the panel and the Confirm button are gone: focus the result instead.
+  // Afterwards the panel and its button are gone: focus the result instead.
   useEffect(() => {
     if (outcome) outcomeRef.current?.focus();
   }, [outcome]);
 
   function change(to: Status) {
-    if (to === "confirmed") {
-      setError(null);
-      setOutcome(null);
-      setConfirming(true);
-      return;
-    }
-    // Cancelling frees the time for someone else; make it a deliberate choice.
-    if (to === "cancelled" && !window.confirm(`Cancel the booking for ${who}?`)) return;
     setError(null);
     setOutcome(null);
+    if (to in PANELS) {
+      const kind = to as PanelKind;
+      if (open !== kind) setText("");
+      setOpen(kind);
+      return;
+    }
+    // Reopening emails no one, so it acts straight away.
     startTransition(async () => {
       const result = await setBookingStatus(id, to);
       if (!result.ok) setError(result.error);
     });
   }
 
-  function notYet() {
-    setConfirming(false);
+  function closePanel() {
+    const was = open;
+    setOpen(null);
     setError(null);
-    confirmButtonRef.current?.focus();
+    if (was) buttonRefs.current[was]?.focus();
   }
 
-  function submitConfirm(event: React.FormEvent) {
+  function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!open) return;
+    const panel = PANELS[open];
     setError(null);
     startTransition(async () => {
-      const result = await confirmBooking(id, note);
+      const result = await panel.send(id, text);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      setConfirming(false);
-      setNote("");
+      setOpen(null);
+      setText("");
       setOutcome(
         result.emailed
-          ? { kind: "emailed", text: `Confirmed. ${clientFirstName} has been emailed.` }
+          ? { kind: "emailed", text: `${panel.done}. ${clientFirstName} has been emailed.` }
           : {
               kind: "not-emailed",
-              text: `Confirmed, but the email to ${clientFirstName} didn't send. Please call or email them yourself.`,
+              text: `${panel.done}, but the email to ${clientFirstName} didn't send. Please call or email them yourself.`,
             },
       );
     });
   }
+
+  const panel = open ? PANELS[open] : null;
 
   return (
     <div className="stack">
@@ -109,11 +158,13 @@ export function BookingStatusButtons({
         {ACTIONS[status].map((action) => (
           <button
             key={action.to}
-            ref={action.to === "confirmed" ? confirmButtonRef : undefined}
+            ref={(el) => {
+              buttonRefs.current[action.to] = el;
+            }}
             type="button"
             className={action.className}
             disabled={pending}
-            aria-expanded={action.to === "confirmed" ? confirming : undefined}
+            aria-expanded={action.to in PANELS ? open === action.to : undefined}
             onClick={() => change(action.to)}
           >
             {action.label}
@@ -122,34 +173,34 @@ export function BookingStatusButtons({
         ))}
       </div>
 
-      {confirming ? (
-        <form className="confirm-panel stack" aria-labelledby={questionId} onSubmit={submitConfirm}>
+      {panel ? (
+        <form key={open} className="confirm-panel stack" aria-labelledby={questionId} onSubmit={submit}>
           <div>
             <p id={questionId} ref={questionRef} tabIndex={-1} className="confirm-panel-question">
-              {`Confirm ${clientFirstName}'s booking on ${when}?`}
+              {panel.question(clientFirstName, when)}
             </p>
-            <p className="confirm-panel-lead">{"They'll get a confirmation email."}</p>
+            <p className="confirm-panel-lead">{panel.lead}</p>
           </div>
           <div className="field">
-            <label htmlFor={noteId}>Note for {clientFirstName} (optional)</label>
-            <p id={noteHintId} className="field-hint">
-              {`Goes in the email only, and is not saved. For example, where to meet. Up to ${CONFIRM_NOTE_MAX} characters.`}
+            <label htmlFor={fieldId}>{panel.fieldLabel(clientFirstName)}</label>
+            <p id={hintId} className="field-hint">
+              {panel.fieldHint}
             </p>
             <textarea
-              id={noteId}
+              id={fieldId}
               rows={3}
-              maxLength={CONFIRM_NOTE_MAX}
-              aria-describedby={noteHintId}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
+              maxLength={panel.max}
+              aria-describedby={hintId}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
             />
           </div>
           <div className="button-row">
-            <button type="submit" className="button button--accent" disabled={pending}>
-              Yes, confirm and email {clientFirstName}
+            <button type="submit" className={panel.submitClassName} disabled={pending}>
+              {panel.submitLabel(clientFirstName)}
             </button>
-            <button type="button" className="button button-secondary" disabled={pending} onClick={notYet}>
-              Not yet
+            <button type="button" className="button button-secondary" disabled={pending} onClick={closePanel}>
+              {panel.backLabel}
             </button>
           </div>
         </form>

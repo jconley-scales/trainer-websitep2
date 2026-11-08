@@ -2,20 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { sendBookingConfirmation } from "@/lib/notify";
+import { sendBookingCancellation, sendBookingConfirmation } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
-import { CONFIRM_NOTE_MAX } from "./limits";
+import { CANCEL_REASON_MAX, CONFIRM_NOTE_MAX } from "./limits";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 /** `emailed` is false when the booking was confirmed but the client's email did not send. */
 export type ConfirmResult = { ok: true; emailed: boolean } | { ok: false; error: string };
+/** `emailed` is false when the booking was cancelled but the client's email did not send. */
+export type CancelResult = ConfirmResult;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Supabase email codes are numeric; local config uses 6 digits, hosted may use up to 10.
 const CODE_PATTERN = /^\d{6,10}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Confirming goes through confirmBooking, which also emails the client.
-const STATUSES = ["new", "cancelled"] as const;
+// Confirming and cancelling go through confirmBooking and cancelBooking, which also email the client.
+const STATUSES = ["new"] as const;
 type Status = (typeof STATUSES)[number];
 
 const UNIQUE_VIOLATION = "23505";
@@ -61,7 +63,7 @@ export async function signOut(): Promise<void> {
 }
 
 /**
- * Cancel or re-open a booking request (neither emails anyone). Reachable by direct POST, so it
+ * Re-open a cancelled booking request (no email). Reachable by direct POST, so it
  * re-checks the session; the update itself runs as the signed-in user, so row
  * level security only lets an admin change a row (anyone else matches nothing).
  */
@@ -79,6 +81,7 @@ export async function setBookingStatus(id: string, status: string): Promise<Acti
     .from("booking_requests")
     .update({ status })
     .eq("id", id)
+    .eq("status", "cancelled")
     .select("id");
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
@@ -147,6 +150,72 @@ export async function confirmBooking(id: string, note: string): Promise<ConfirmR
     });
   } catch (err) {
     console.error("Booking confirmation email could not be sent:", err);
+    return { ok: true, emailed: false };
+  }
+  return { ok: true, emailed: true };
+}
+
+/**
+ * Cancel a new request or a confirmed session, then email the client, with the
+ * trainer's optional reason (never stored). A new request gets a "can't make
+ * this time" email; a confirmed session gets a "session cancelled" one.
+ * Reachable by direct POST, so it re-checks its input and the session.
+ *
+ * The update only matches the status that was just read, so if the booking
+ * changed in between (another tab), nothing is cancelled and no email is sent.
+ * Like confirmBooking, this waits for the email and the booking stays
+ * cancelled whether or not it sends.
+ */
+export async function cancelBooking(id: string, reason: string): Promise<CancelResult> {
+  if (typeof id !== "string" || !UUID.test(id) || typeof reason !== "string") {
+    return { ok: false, error: "That change could not be made." };
+  }
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length > CANCEL_REASON_MAX) {
+    return { ok: false, error: `Please shorten the reason to ${CANCEL_REASON_MAX} characters or fewer.` };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/admin/sign-in");
+
+  const notChanged = {
+    ok: false,
+    error: "That booking could not be changed. Please refresh the page.",
+  } as const;
+  const failed = { ok: false, error: "Sorry, that did not save. Please try again." } as const;
+
+  const { data: rows, error: readError } = await supabase
+    .from("booking_requests")
+    .select("status, name, email, starts_at, ends_at")
+    .eq("id", id)
+    .in("status", ["new", "confirmed"]);
+  if (readError) return failed;
+  const booking = rows?.[0];
+  if (!booking) return notChanged;
+
+  const { data, error } = await supabase
+    .from("booking_requests")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+    .eq("status", booking.status)
+    .select("id");
+  if (error) return failed;
+  if (!data || data.length === 0) return notChanged;
+  revalidatePath("/admin");
+
+  try {
+    await sendBookingCancellation({
+      name: booking.name,
+      email: booking.email,
+      startsAt: booking.starts_at,
+      endsAt: booking.ends_at,
+      wasConfirmed: booking.status === "confirmed",
+      reason: trimmedReason,
+    });
+  } catch (err) {
+    console.error("Booking cancellation email could not be sent:", err);
     return { ok: true, emailed: false };
   }
   return { ok: true, emailed: true };

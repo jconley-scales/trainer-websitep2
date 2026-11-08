@@ -4,6 +4,7 @@ import { BookingStatusButtons } from "@/app/admin/booking-status-buttons";
 import { confirmBooking, setBookingStatus } from "@/app/admin/actions";
 
 vi.mock("@/app/admin/actions", () => ({
+  cancelBooking: vi.fn(),
   confirmBooking: vi.fn(),
   setBookingStatus: vi.fn(async () => ({ ok: true })),
 }));

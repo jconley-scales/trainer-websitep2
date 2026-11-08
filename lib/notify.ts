@@ -34,6 +34,21 @@ function mailer() {
   return { transport, from };
 }
 
+/** The site's public address, without a trailing slash, for links in emails. */
+const siteUrl = () => (process.env.SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+
+/** The day and the time of a session on their own indented lines, so they stand out in an email. */
+const sessionLines = (startsAt: string, endsAt: string) => [
+  `    ${formatDayMonth(startsAt)}`,
+  `    ${formatTimeRange(startsAt, endsAt)} (${formatTimeZoneName(startsAt)})`,
+];
+
+/** The trainer's optional words, under their own heading, or nothing when blank. */
+const trainerNote = (note: string) => {
+  const trimmed = note.trim();
+  return trimmed ? [`A note from ${SITE.trainerFirstName}:`, trimmed, ""] : [];
+};
+
 /** The mailer plus the trainer's address, or null when either is not configured. */
 function trainerMailer() {
   const to = process.env.BOOKING_NOTIFY_EMAIL;
@@ -73,7 +88,6 @@ export async function notifyTrainerOfBooking(booking: NewBooking): Promise<void>
   }
   const { transport, to, from } = mailer;
   const when = `${formatDate(booking.startsAt)}, ${formatTimeRange(booking.startsAt, booking.endsAt)}`;
-  const siteUrl = (process.env.SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
   const text = [
     `New booking request for ${SITE.name}.`,
@@ -86,7 +100,7 @@ export async function notifyTrainerOfBooking(booking: NewBooking): Promise<void>
     booking.note ? `Note:\n${booking.note}` : "Note: (none)",
     "",
     "This is a request, not yet confirmed. Confirm or cancel it here:",
-    `${siteUrl}/admin`,
+    `${siteUrl()}/admin`,
   ].join("\n");
 
   await transport.sendMail({
@@ -159,19 +173,15 @@ export async function sendBookingConfirmation(booking: BookingConfirmation): Pro
   if (!m) {
     throw new Error("Confirmation email is not configured: set SMTP_HOST and BOOKING_FROM_EMAIL (or BOOKING_NOTIFY_EMAIL).");
   }
-  const day = formatDayMonth(booking.startsAt);
-  const note = booking.note.trim();
-
   // Plain text, laid out so the day and time stand out on their own lines.
   const text = [
     `Hi ${firstName(booking.name)},`,
     "",
     "Your session is confirmed.",
     "",
-    `    ${day}`,
-    `    ${formatTimeRange(booking.startsAt, booking.endsAt)} (${formatTimeZoneName(booking.startsAt)})`,
+    ...sessionLines(booking.startsAt, booking.endsAt),
     "",
-    ...(note ? [`A note from ${SITE.trainerFirstName}:`, note, ""] : []),
+    ...trainerNote(booking.note),
     "If you need to change or cancel, just reply to this email.",
     "",
     "See you then,",
@@ -183,6 +193,63 @@ export async function sendBookingConfirmation(booking: BookingConfirmation): Pro
     to: oneLine(booking.email),
     replyTo: m.from,
     subject: oneLine(`Confirmed: ${formatDayMonthTime(booking.startsAt)}`),
+    text,
+  });
+}
+
+export type BookingCancellation = {
+  name: string;
+  email: string;
+  startsAt: string;
+  endsAt: string;
+  /** True if the session had been confirmed; false if it was still a new request being turned down. */
+  wasConfirmed: boolean;
+  /** Optional reason from the trainer. Only ever emailed. */
+  reason: string;
+};
+
+/**
+ * Email a client that their request was turned down, or their confirmed session
+ * cancelled. Same sender, layout and failure rules as sendBookingConfirmation:
+ * throws when email is not configured or sending fails.
+ */
+export async function sendBookingCancellation(booking: BookingCancellation): Promise<void> {
+  const m = mailer();
+  if (!m) {
+    throw new Error("Cancellation email is not configured: set SMTP_HOST and BOOKING_FROM_EMAIL (or BOOKING_NOTIFY_EMAIL).");
+  }
+  const bookUrl = `${siteUrl()}/book`;
+  const [lead, nextStep, label] = booking.wasConfirmed
+    ? [
+        "Your session has been cancelled:",
+        `If you'd like a new time, book again at ${bookUrl}, or reply to this email.`,
+        "Cancelled",
+      ]
+    : [
+        "I'm sorry, I can't make this time work:",
+        `Please pick another time at ${bookUrl}, or reply to this email.`,
+        "Can't make it",
+      ];
+
+  const text = [
+    `Hi ${firstName(booking.name)},`,
+    "",
+    lead,
+    "",
+    ...sessionLines(booking.startsAt, booking.endsAt),
+    "",
+    ...trainerNote(booking.reason),
+    nextStep,
+    "",
+    "Best wishes,",
+    SITE.trainer,
+  ].join("\n");
+
+  await m.transport.sendMail({
+    from: m.from,
+    to: oneLine(booking.email),
+    replyTo: m.from,
+    subject: oneLine(`${label}: ${formatDayMonthTime(booking.startsAt)}`),
     text,
   });
 }

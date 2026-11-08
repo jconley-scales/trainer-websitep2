@@ -124,7 +124,7 @@ export const SITE = {
         ],
         afterList: [
           "I use these details only to arrange and confirm your sessions and to reply to you. That is all.",
-          "When I confirm your session, you get an email about it at the address you gave.",
+          "When I confirm or cancel your session, you get an email about it at the address you gave.",
           "This site has no advertising or tracking cookies, and it does not follow you to other websites. It works the same whether or not your browser sends a “Do Not Track” signal.",
         ],
       },
@@ -145,7 +145,7 @@ export const SITE = {
           "Supabase stores booking requests in a secure database.",
           "Vercel hosts the website.",
           // Update this line if the site's email provider (SMTP_* settings) changes.
-          "Gmail delivers the emails about booking requests and messages, including the email confirming your session, and keeps copies in my inbox.",
+          "Gmail delivers the emails about booking requests and messages, including the emails confirming or cancelling your session, and keeps copies in my inbox.",
         ],
         afterList: [
           "I never sell your information, and I never share it with anyone for marketing.",

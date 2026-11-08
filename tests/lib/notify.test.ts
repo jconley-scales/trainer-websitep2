@@ -5,7 +5,12 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: vi.fn(() => ({ sendMail })) },
 }));
 
-import { notifyTrainerOfBooking, sendBookingConfirmation, sendContactMessage } from "@/lib/notify";
+import {
+  notifyTrainerOfBooking,
+  sendBookingCancellation,
+  sendBookingConfirmation,
+  sendContactMessage,
+} from "@/lib/notify";
 
 // 2030-10-25 is a Friday; 13:00Z is 9:00 AM Eastern (daylight time).
 const BOOKING = {
@@ -82,6 +87,97 @@ describe("sendBookingConfirmation", () => {
   it("throws when email is not configured, so the caller can warn the trainer", async () => {
     vi.stubEnv("SMTP_HOST", "");
     await expect(sendBookingConfirmation({ ...BOOKING, note: "" })).rejects.toThrow();
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendBookingCancellation", () => {
+  it("turns down a new request: sorry, pick another time, signed by the trainer", async () => {
+    vi.stubEnv("SITE_URL", "https://myolderfitness.com/");
+    await sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "" });
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe("jordan@example.com");
+    expect(mail.from).toBe("Booking <booking@example.com>");
+    expect(mail.replyTo).toBe("Booking <booking@example.com>");
+    expect(mail.html).toBeUndefined();
+    expect(mail.subject).toBe("Can't make it: Friday, October 25 at 9:00 AM");
+    expect(mail.text).toBe(
+      [
+        "Hi Jordan,",
+        "",
+        "I'm sorry, I can't make this time work:",
+        "",
+        "    Friday, October 25",
+        "    9:00 AM to 10:00 AM (Eastern time)",
+        "",
+        "Please pick another time at https://myolderfitness.com/book, or reply to this email.",
+        "",
+        "Best wishes,",
+        "Jervaughn Scales",
+      ].join("\n"),
+    );
+  });
+
+  it("cancels a confirmed session, offering to book again", async () => {
+    vi.stubEnv("SITE_URL", "https://myolderfitness.com");
+    await sendBookingCancellation({ ...BOOKING, wasConfirmed: true, reason: "" });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe("Cancelled: Friday, October 25 at 9:00 AM");
+    expect(mail.text).toBe(
+      [
+        "Hi Jordan,",
+        "",
+        "Your session has been cancelled:",
+        "",
+        "    Friday, October 25",
+        "    9:00 AM to 10:00 AM (Eastern time)",
+        "",
+        "If you'd like a new time, book again at https://myolderfitness.com/book, or reply to this email.",
+        "",
+        "Best wishes,",
+        "Jervaughn Scales",
+      ].join("\n"),
+    );
+  });
+
+  it("includes the reason when turning down a new request", async () => {
+    await sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "I'm away that week." });
+
+    const { text } = sendMail.mock.calls[0][0];
+    expect(text).toContain(
+      [
+        "    9:00 AM to 10:00 AM (Eastern time)",
+        "",
+        "A note from Jervaughn:",
+        "I'm away that week.",
+        "",
+        "Please pick another time at http://localhost:3000/book, or reply to this email.",
+      ].join("\n"),
+    );
+  });
+
+  it("includes the trainer's reason under its own line when one is given", async () => {
+    await sendBookingCancellation({ ...BOOKING, wasConfirmed: true, reason: "  I'm unwell this week.  " });
+
+    const { text } = sendMail.mock.calls[0][0];
+    expect(text).toContain(
+      [
+        "    9:00 AM to 10:00 AM (Eastern time)",
+        "",
+        "A note from Jervaughn:",
+        "I'm unwell this week.",
+        "",
+        "If you'd like a new time, book again at http://localhost:3000/book, or reply to this email.",
+      ].join("\n"),
+    );
+  });
+
+  it("throws when email is not configured, so the caller can warn the trainer", async () => {
+    vi.stubEnv("SMTP_HOST", "");
+    await expect(sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "" })).rejects.toThrow();
     expect(sendMail).not.toHaveBeenCalled();
   });
 });
