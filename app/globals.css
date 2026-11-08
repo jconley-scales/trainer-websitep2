@@ -1391,6 +1391,40 @@ button,
   white-space: pre-wrap;
 }
 
+/* The "are you sure?" panel under a booking's Confirm button. */
+.confirm-panel {
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-bg-tint);
+}
+
+.confirm-panel-question {
+  margin: 0;
+  font-size: var(--font-large);
+  font-weight: 700;
+}
+
+.confirm-panel-lead {
+  margin: 0.25rem 0 0;
+}
+
+.confirm-panel .field-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* Done, but something needs the trainer's attention (e.g. an email did not send). */
+.warning-message {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-focus);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
 .admin-past {
   margin-top: 2.5rem;
 }

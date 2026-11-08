@@ -692,3 +692,121 @@ test.describe("colour contrast of controls axe cannot fully judge", () => {
     expect(await contrastRatio(page.locator("#login-error"))).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+test.describe("/admin confirm panel", () => {
+  const seeded = { bookingId: "", adminEmail: "", userId: "" };
+
+  /**
+   * Seeds an admin and one new booking request a few years out (a random hour,
+   * so reruns never collide on the one-live-booking-per-time index), then signs
+   * in through the real emailed-code screen.
+   */
+  async function signInAsAdminWithBooking(page: Page, request: APIRequestContext) {
+    seeded.adminEmail = `a11y-admin-${randomUUID()}@example.com`;
+    const user = await request.post(`${supabaseUrl}/auth/v1/admin/users`, {
+      headers: adminHeaders,
+      data: { email: seeded.adminEmail, email_confirm: true },
+    });
+    expect(user.ok()).toBeTruthy();
+    seeded.userId = ((await user.json()) as { id: string }).id;
+    await rest(request, "admins", { email: seeded.adminEmail });
+
+    const start = new Date(Date.UTC(2033, 0, 1, 14) + Math.floor(Math.random() * 3000) * 86_400_000);
+    const end = new Date(start.getTime() + 3_600_000);
+    const booking = await rest(request, "booking_requests", {
+      name: "Jordan Tester",
+      email: `a11y-client-${randomUUID()}@example.com`,
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+    });
+    seeded.bookingId = booking.id;
+
+    await page.goto("/admin/sign-in");
+    await page.getByLabel("Your email address").fill(seeded.adminEmail);
+    await page.getByRole("button", { name: "Email me a code" }).click();
+    await expect(page.getByLabel("Code from your email")).toBeVisible();
+    const link = await request.post(`${supabaseUrl}/auth/v1/admin/generate_link`, {
+      headers: adminHeaders,
+      data: { type: "magiclink", email: seeded.adminEmail },
+    });
+    expect(link.ok()).toBeTruthy();
+    await page.getByLabel("Code from your email").fill((await link.json()).email_otp as string);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Bookings" })).toBeVisible();
+  }
+
+  test.afterEach(async ({ request }) => {
+    if (seeded.bookingId) {
+      await request.delete(`${supabaseUrl}/rest/v1/booking_requests?id=eq.${seeded.bookingId}`, {
+        headers: adminHeaders,
+      });
+    }
+    if (seeded.adminEmail) {
+      await request.delete(`${supabaseUrl}/rest/v1/admins?email=eq.${encodeURIComponent(seeded.adminEmail)}`, {
+        headers: adminHeaders,
+      });
+    }
+    if (seeded.userId) {
+      await request.delete(`${supabaseUrl}/auth/v1/admin/users/${seeded.userId}`, { headers: adminHeaders });
+    }
+    seeded.bookingId = seeded.adminEmail = seeded.userId = "";
+  });
+
+  test("open panel: no serious axe violations, focus moves in and back, 48px targets, visible focus", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    const confirm = card.getByRole("button", { name: /^Confirm the booking for Jordan Tester/ });
+    await confirm.click();
+
+    const panel = card.getByRole("form", { name: /^Confirm Jordan's booking on .+ at .+\?$/ });
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("They'll get a confirmation email.");
+    // Focus lands on the question, so the panel is announced.
+    await expect(panel.locator(".confirm-panel-question")).toBeFocused();
+
+    await expectNoSeriousViolations(page, "/admin (confirm panel)");
+
+    // Tab walks the panel's own controls in order, each 48px with a focus ring.
+    const expected = ["Note for Jordan (optional)", "Yes, confirm and email Jordan", "Not yet"];
+    for (const name of expected) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return {
+          label: (el as HTMLTextAreaElement).labels?.[0]?.textContent ?? el.textContent ?? "",
+          width: rect.width,
+          height: rect.height,
+          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
+        };
+      });
+      expect(stop.label.trim()).toBe(name);
+      expect(stop.height, `${name} height`).toBeGreaterThanOrEqual(48);
+      expect(stop.width, `${name} width`).toBeGreaterThanOrEqual(48);
+      expect(stop.outline, `${name} focus ring`).toBe(true);
+    }
+
+    // "Not yet" closes the panel and returns focus to Confirm.
+    await page.keyboard.press("Enter");
+    await expect(panel).toBeHidden();
+    await expect(confirm).toBeFocused();
+  });
+
+  test("confirming with a note: the booking is confirmed and the result is announced", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    await card.getByRole("button", { name: /^Confirm the booking for Jordan Tester/ }).click();
+    await card.getByLabel("Note for Jordan (optional)").fill("Let's meet at Oakledge Park, by the main pavilion.");
+    await card.getByRole("button", { name: "Yes, confirm and email Jordan" }).click();
+
+    await expect(card.locator(".status-badge")).toHaveText("Confirmed");
+    // Emailed (local mail viewer) or, if mail is not set up, the warning: either is announced.
+    const result = card.locator(".notice-message, .warning-message");
+    await expect(result).toHaveText(
+      /^(Confirmed\. Jordan has been emailed\.|Confirmed, but the email to Jordan didn't send\. Please call or email them yourself\.)$/,
+    );
+    await expect(result).toBeFocused();
+    await expectNoSeriousViolations(page, "/admin (after confirming)");
+  });
+});

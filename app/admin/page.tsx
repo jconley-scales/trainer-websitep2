@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { formatDate, formatTimeRange } from "@/lib/format";
+import { firstName, formatDate, formatDayMonthTime, formatTimeRange } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import { BookingStatusButtons } from "./booking-status-buttons";
@@ -172,7 +172,13 @@ function BookingCards({ bookings, readOnly = false }: { bookings: Booking[]; rea
               </div>
             </dl>
             {readOnly ? null : (
-              <BookingStatusButtons id={b.id} status={b.status} who={`${b.name} on ${date}`} />
+              <BookingStatusButtons
+                id={b.id}
+                status={b.status}
+                who={`${b.name} on ${date}`}
+                clientFirstName={firstName(b.name)}
+                when={formatDayMonthTime(b.starts_at)}
+              />
             )}
           </li>
         );

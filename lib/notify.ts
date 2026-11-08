@@ -1,20 +1,28 @@
 import "server-only";
 import nodemailer from "nodemailer";
-import { formatDate, formatTimeRange } from "@/lib/format";
+import {
+  firstName,
+  formatDate,
+  formatDayMonth,
+  formatDayMonthTime,
+  formatTimeRange,
+  formatTimeZoneName,
+} from "@/lib/format";
 import { SITE } from "@/lib/site";
 
 /** Visitor input goes into a header; strip line breaks so it stays one line. */
 const oneLine = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
 
 /**
- * The SMTP transport and the trainer's address, or null when email is not
+ * The SMTP transport and the booking sender address, or null when email is not
  * configured. The privacy page names the email provider (`SITE.privacy` in
- * lib/site.ts): update it if the SMTP provider changes. Shared by booking notifications and the contact form.
+ * lib/site.ts): update it if the SMTP provider changes. Shared by every email
+ * the site sends, to the trainer or to a client.
  */
-function trainerMailer() {
+function mailer() {
   const host = process.env.SMTP_HOST;
-  const to = process.env.BOOKING_NOTIFY_EMAIL;
-  if (!host || !to) return null;
+  const from = process.env.BOOKING_FROM_EMAIL ?? process.env.BOOKING_NOTIFY_EMAIL;
+  if (!host || !from) return null;
   const transport = nodemailer.createTransport({
     host,
     port: Number(process.env.SMTP_PORT ?? 587),
@@ -23,7 +31,15 @@ function trainerMailer() {
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS ?? "" }
       : undefined,
   });
-  return { transport, to, from: process.env.BOOKING_FROM_EMAIL ?? to };
+  return { transport, from };
+}
+
+/** The mailer plus the trainer's address, or null when either is not configured. */
+function trainerMailer() {
+  const to = process.env.BOOKING_NOTIFY_EMAIL;
+  const m = mailer();
+  if (!to || !m) return null;
+  return { ...m, to };
 }
 
 export type NewBooking = {
@@ -120,6 +136,53 @@ export async function sendContactMessage(msg: ContactMessage): Promise<void> {
     to,
     replyTo: msg.email,
     subject: oneLine(`Website message from ${msg.name}`),
+    text,
+  });
+}
+
+export type BookingConfirmation = {
+  name: string;
+  email: string;
+  startsAt: string;
+  endsAt: string;
+  /** Optional words from the trainer (e.g. where to meet). Only ever emailed. */
+  note: string;
+};
+
+/**
+ * Email a client that their session is confirmed. Replies go to the booking
+ * address, so they reach the trainer. Throws when email is not configured or
+ * sending fails, so the caller can tell the trainer to get in touch instead.
+ */
+export async function sendBookingConfirmation(booking: BookingConfirmation): Promise<void> {
+  const m = mailer();
+  if (!m) {
+    throw new Error("Confirmation email is not configured: set SMTP_HOST and BOOKING_FROM_EMAIL (or BOOKING_NOTIFY_EMAIL).");
+  }
+  const day = formatDayMonth(booking.startsAt);
+  const note = booking.note.trim();
+
+  // Plain text, laid out so the day and time stand out on their own lines.
+  const text = [
+    `Hi ${firstName(booking.name)},`,
+    "",
+    "Your session is confirmed.",
+    "",
+    `    ${day}`,
+    `    ${formatTimeRange(booking.startsAt, booking.endsAt)} (${formatTimeZoneName(booking.startsAt)})`,
+    "",
+    ...(note ? [`A note from ${SITE.trainerFirstName}:`, note, ""] : []),
+    "If you need to change or cancel, just reply to this email.",
+    "",
+    "See you then,",
+    SITE.trainer,
+  ].join("\n");
+
+  await m.transport.sendMail({
+    from: m.from,
+    to: oneLine(booking.email),
+    replyTo: m.from,
+    subject: oneLine(`Confirmed: ${formatDayMonthTime(booking.startsAt)}`),
     text,
   });
 }

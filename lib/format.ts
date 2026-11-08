@@ -38,6 +38,39 @@ export function formatTime(iso: string): string {
   return plain(timeFormat.format(new Date(iso)));
 }
 
+const dayMonthFormat = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: DISPLAY_TIME_ZONE,
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
+
+/** "Tuesday, March 5": for near-term dates, where the year only adds noise. */
+export function formatDayMonth(iso: string): string {
+  return plain(dayMonthFormat.format(new Date(iso)));
+}
+
+const zoneNameFormat = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: DISPLAY_TIME_ZONE,
+  timeZoneName: "longGeneric",
+});
+
+/** "Eastern time": the display time zone named in words, as of the given instant. */
+export function formatTimeZoneName(iso: string): string {
+  const name = zoneNameFormat.formatToParts(new Date(iso)).find((p) => p.type === "timeZoneName")?.value;
+  return (name ?? DISPLAY_TIME_ZONE).replace(/ Time$/, " time");
+}
+
+/** "Jordan" from "Jordan Tester": the first word of a name, for a friendly greeting. */
+export function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? "";
+}
+
+/** "Tuesday, March 5 at 10:00 AM": one moment, as the confirm panel and email name it. */
+export function formatDayMonthTime(iso: string): string {
+  return `${formatDayMonth(iso)} at ${formatTime(iso)}`;
+}
+
 /** "10:00 AM to 11:00 AM" ("to" reads more clearly than a dash, also aloud). */
 export function formatTimeRange(startIso: string, endIso: string): string {
   return `${formatTime(startIso)} to ${formatTime(endIso)}`;

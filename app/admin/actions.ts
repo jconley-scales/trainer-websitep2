@@ -2,16 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { sendBookingConfirmation } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
+import { CONFIRM_NOTE_MAX } from "./limits";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
+/** `emailed` is false when the booking was confirmed but the client's email did not send. */
+export type ConfirmResult = { ok: true; emailed: boolean } | { ok: false; error: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Supabase email codes are numeric; local config uses 6 digits, hosted may use up to 10.
 const CODE_PATTERN = /^\d{6,10}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const STATUSES = ["new", "confirmed", "cancelled"] as const;
+// Confirming goes through confirmBooking, which also emails the client.
+const STATUSES = ["new", "cancelled"] as const;
 type Status = (typeof STATUSES)[number];
+
 const UNIQUE_VIOLATION = "23505";
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -55,7 +61,7 @@ export async function signOut(): Promise<void> {
 }
 
 /**
- * Confirm, cancel or re-open a booking request. Reachable by direct POST, so it
+ * Cancel or re-open a booking request (neither emails anyone). Reachable by direct POST, so it
  * re-checks the session; the update itself runs as the signed-in user, so row
  * level security only lets an admin change a row (anyone else matches nothing).
  */
@@ -78,7 +84,7 @@ export async function setBookingStatus(id: string, status: string): Promise<Acti
     if (error.code === UNIQUE_VIOLATION) {
       return {
         ok: false,
-        error: "Another booking already holds this time, so this one cannot be reopened or confirmed.",
+        error: "Another booking already holds this time, so this one cannot be reopened.",
       };
     }
     return { ok: false, error: "Sorry, that did not save. Please try again." };
@@ -88,4 +94,60 @@ export async function setBookingStatus(id: string, status: string): Promise<Acti
   }
   revalidatePath("/admin");
   return { ok: true };
+}
+
+/**
+ * Confirm a new booking request, then email the client, with the trainer's
+ * optional note (never stored). Reachable by direct POST, so it re-checks its
+ * input and the session. Only a "new" request is confirmed, so a repeat tap or
+ * a second tab cannot email the client twice.
+ *
+ * Unlike the new-booking alert this waits for the email: the trainer is told
+ * if it did not send, and the booking stays confirmed either way.
+ */
+export async function confirmBooking(id: string, note: string): Promise<ConfirmResult> {
+  if (typeof id !== "string" || !UUID.test(id) || typeof note !== "string") {
+    return { ok: false, error: "That change could not be made." };
+  }
+  const trimmedNote = note.trim();
+  if (trimmedNote.length > CONFIRM_NOTE_MAX) {
+    return { ok: false, error: `Please shorten the note to ${CONFIRM_NOTE_MAX} characters or fewer.` };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/admin/sign-in");
+
+  const { data, error } = await supabase
+    .from("booking_requests")
+    .update({ status: "confirmed" })
+    .eq("id", id)
+    .eq("status", "new")
+    .select("name, email, starts_at, ends_at");
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) {
+      return { ok: false, error: "Another booking already holds this time, so this one cannot be confirmed." };
+    }
+    return { ok: false, error: "Sorry, that did not save. Please try again." };
+  }
+  const booking = data?.[0];
+  if (!booking) {
+    return { ok: false, error: "That booking could not be changed. Please refresh the page." };
+  }
+  revalidatePath("/admin");
+
+  try {
+    await sendBookingConfirmation({
+      name: booking.name,
+      email: booking.email,
+      startsAt: booking.starts_at,
+      endsAt: booking.ends_at,
+      note: trimmedNote,
+    });
+  } catch (err) {
+    console.error("Booking confirmation email could not be sent:", err);
+    return { ok: true, emailed: false };
+  }
+  return { ok: true, emailed: true };
 }
