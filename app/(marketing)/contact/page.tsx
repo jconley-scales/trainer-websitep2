@@ -5,7 +5,7 @@ import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: `Send ${SITE.trainer} a message about personal training in the Burlington, Vermont area. ${SITE.assessmentNote}`,
+  description: `Send ${SITE.trainer} a message about personal training in Chittenden County, Vermont. ${SITE.assessmentNote}`,
 };
 
 export default function ContactPage() {
