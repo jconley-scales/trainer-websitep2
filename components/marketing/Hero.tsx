@@ -13,9 +13,17 @@ export function Hero() {
             Get fit with My Older Fitness
           </h1>
           <p className="hero-lead">
-            Friendly, one-to-one personal training that helps you get stronger,
-            steadier and more flexible, whatever your age or starting point. In
-            the Greater Burlington, Vermont area, at the YMCA or in your home.
+            My Older Fitness offers private personal training designed to help
+            seniors and older adults become stronger, improve their balance and
+            mobility, and ultimately maintain their independence. Each training
+            session is tailored to the individual&rsquo;s abilities, needs, and
+            fitness goals. Training is available throughout Chittenden County,
+            Vermont.
+          </p>
+          <p className="hero-lead">
+            It&rsquo;s never too late to start investing in your health,
+            strength, and well-being. Take the first step toward feeling
+            stronger and moving with confidence.
           </p>
           <div className="hero-actions">
             <Link className="button button--accent button--lg" href="/book">

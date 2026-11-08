@@ -605,6 +605,11 @@ button.slot-row:hover:not(:disabled) {
   line-height: 1.5;
 }
 
+/* Keep consecutive hero paragraphs together; only the last one gets the big gap before the buttons. */
+.hero-lead:has(+ .hero-lead) {
+  margin-bottom: var(--space);
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1143,6 +1148,9 @@ button,
   }
   .hero-inner > *:nth-child(4) {
     animation-delay: 410ms;
+  }
+  .hero-inner > *:nth-child(5) {
+    animation-delay: 520ms;
   }
 
 }
