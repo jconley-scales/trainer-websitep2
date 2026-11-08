@@ -14,7 +14,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: `npm run dev -- --port ${PORT}`,
-    url: `http://localhost:${PORT}/favicon.ico`,
+    url: `http://localhost:${PORT}/`,
     reuseExistingServer: true,
     timeout: 120_000,
   },
