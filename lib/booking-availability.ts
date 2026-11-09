@@ -84,6 +84,28 @@ function zonedTimeToUtc(year: number, month: number, day: number, hour: number, 
   return new Date(guess.getTime() - offset * 60000);
 }
 
+/**
+ * The UTC instant for a gym-zone calendar date ("YYYY-MM-DD") and wall-clock
+ * time ("HH:MM", 24h), as the trainer types them on /admin. Null if either
+ * does not exist (e.g. "2030-02-30" or "24:00").
+ *
+ * Corrects twice, so a time just after the clocks change still lands on the
+ * right hour (one correction uses the offset from the wrong side of the change).
+ */
+export function gymTimeToUtc(date: string, time: string): Date | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const t = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!d || !t) return null;
+  const [year, month, day, hour, minute] = [d[1], d[2], d[3], t[1], t[2]].map(Number);
+  if (hour > 23 || minute > 59) return null;
+  const asUtc = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (asUtc.getUTCMonth() !== month - 1 || asUtc.getUTCDate() !== day) return null;
+
+  const first = zonedTimeToUtc(year, month, day, hour, minute);
+  const offset = zoneOffsetMinutes(first, DISPLAY_TIME_ZONE);
+  return new Date(asUtc.getTime() - offset * 60000);
+}
+
 /** The gym-zone weekday (0–6) and Y/M/D for a UTC instant. */
 function zonedParts(instant: Date): { weekday: number; year: number; month: number; day: number; date: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {

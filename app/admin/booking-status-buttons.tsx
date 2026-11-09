@@ -29,6 +29,8 @@ const PANELS: Record<
     fieldHint?: string;
     max: number;
     submitLabel: (name: string) => string;
+    /** The submit button when nobody will be emailed. */
+    noEmailSubmitLabel: string;
     submitClassName: string;
     backLabel: string;
     done: string;
@@ -42,6 +44,7 @@ const PANELS: Record<
     fieldHint: `Goes in the email only, and is not saved. For example, where to meet. Up to ${CONFIRM_NOTE_MAX} characters.`,
     max: CONFIRM_NOTE_MAX,
     submitLabel: (name) => `Yes, confirm and email ${name}`,
+    noEmailSubmitLabel: "Yes, confirm",
     submitClassName: "button button--accent",
     backLabel: "Not yet",
     done: "Confirmed",
@@ -54,6 +57,7 @@ const PANELS: Record<
     fieldHint: `Not saved. Up to ${CANCEL_REASON_MAX} characters.`,
     max: CANCEL_REASON_MAX,
     submitLabel: (name) => `Yes, cancel and email ${name}`,
+    noEmailSubmitLabel: "Yes, cancel",
     submitClassName: "button button-danger",
     backLabel: "Keep booking",
     done: "Cancelled",
@@ -62,7 +66,7 @@ const PANELS: Record<
 };
 
 /** What happened after confirming or cancelling, shown under the buttons. */
-type Outcome = { kind: "emailed" | "not-emailed"; text: string };
+type Outcome = { kind: "done" | "not-emailed"; text: string };
 
 export function BookingStatusButtons({
   id,
@@ -70,6 +74,7 @@ export function BookingStatusButtons({
   who,
   clientFirstName,
   when,
+  hasEmail = true,
 }: {
   id: string;
   status: Status;
@@ -79,6 +84,8 @@ export function BookingStatusButtons({
   clientFirstName: string;
   /** e.g. "Friday, October 23 at 9:00 AM", for the confirm and cancel panels. */
   when: string;
+  /** False for an admin booking with no email: nobody is emailed, so the panels say so and ask for no note. */
+  hasEmail?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -140,8 +147,10 @@ export function BookingStatusButtons({
       setOpen(null);
       setText("");
       setOutcome(
-        result.emailed
-          ? { kind: "emailed", text: `${panel.done}. ${clientFirstName} has been emailed.` }
+        result.emailed === null
+          ? { kind: "done", text: `${panel.done}. ${noEmail}` }
+          : result.emailed
+          ? { kind: "done", text: `${panel.done}. ${clientFirstName} has been emailed.` }
           : {
               kind: "not-emailed",
               text: `${panel.done}, but the email to ${clientFirstName} didn't send. Please call or email them yourself.`,
@@ -151,6 +160,7 @@ export function BookingStatusButtons({
   }
 
   const panel = open ? PANELS[open] : null;
+  const noEmail = `There's no email for ${clientFirstName}, so please let them know yourself.`;
 
   return (
     <div className="stack">
@@ -179,25 +189,27 @@ export function BookingStatusButtons({
             <p id={questionId} ref={questionRef} tabIndex={-1} className="confirm-panel-question">
               {panel.question(clientFirstName, when)}
             </p>
-            <p className="confirm-panel-lead">{panel.lead}</p>
+            <p className="confirm-panel-lead">{hasEmail ? panel.lead : noEmail}</p>
           </div>
-          <div className="field">
-            <label htmlFor={fieldId}>{panel.fieldLabel(clientFirstName)}</label>
-            <p id={hintId} className="field-hint">
-              {panel.fieldHint}
-            </p>
-            <textarea
-              id={fieldId}
-              rows={3}
-              maxLength={panel.max}
-              aria-describedby={hintId}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-          </div>
+          {hasEmail ? (
+            <div className="field">
+              <label htmlFor={fieldId}>{panel.fieldLabel(clientFirstName)}</label>
+              <p id={hintId} className="field-hint">
+                {panel.fieldHint}
+              </p>
+              <textarea
+                id={fieldId}
+                rows={3}
+                maxLength={panel.max}
+                aria-describedby={hintId}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+            </div>
+          ) : null}
           <div className="button-row">
             <button type="submit" className={panel.submitClassName} disabled={pending}>
-              {panel.submitLabel(clientFirstName)}
+              {hasEmail ? panel.submitLabel(clientFirstName) : panel.noEmailSubmitLabel}
             </button>
             <button type="button" className="button button-secondary" disabled={pending} onClick={closePanel}>
               {panel.backLabel}
@@ -210,8 +222,8 @@ export function BookingStatusButtons({
         <p
           ref={outcomeRef}
           tabIndex={-1}
-          role={outcome.kind === "emailed" ? "status" : "alert"}
-          className={outcome.kind === "emailed" ? "notice-message" : "warning-message"}
+          role={outcome.kind === "done" ? "status" : "alert"}
+          className={outcome.kind === "done" ? "notice-message" : "warning-message"}
         >
           {outcome.text}
         </p>

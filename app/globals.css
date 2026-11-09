@@ -196,6 +196,7 @@ input[type="radio"] {
 }
 
 .field input,
+.field select,
 .field textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -207,6 +208,7 @@ input[type="radio"] {
 }
 
 .field input:hover,
+.field select:hover,
 .field textarea:hover {
   border-color: var(--color-primary);
 }
@@ -1418,6 +1420,33 @@ button.slot-row.is-selected:hover:not(:disabled) {
 
 .admin-note {
   white-space: pre-wrap;
+}
+
+/* Admin bookings: "Added by you" sits beside the status, in words. */
+.admin-booking-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.source-tag {
+  display: inline-block;
+  padding: 0.125rem 0.75rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 999px;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* "Add a booking": date, start time and length side by side when there's room. */
+.add-booking {
+  margin-bottom: 1.5rem;
+}
+
+.add-booking-when {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space);
 }
 
 /* The "are you sure?" panel under a booking's Confirm button. */

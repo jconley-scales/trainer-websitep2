@@ -857,4 +857,142 @@ test.describe("/admin confirm and cancel panels", () => {
     await expect(result).toBeFocused();
     await expectNoSeriousViolations(page, "/admin (after cancelling)");
   });
+
+  /** Admin bookings these tests add carry this in the name, so cleanup can find them (they may have no email). */
+  const ADDED_MARK = "e2e-added";
+
+  test.afterEach(async ({ request }) => {
+    await request.delete(`${supabaseUrl}/rest/v1/booking_requests?name=like.*${ADDED_MARK}*`, {
+      headers: adminHeaders,
+    });
+  });
+
+  /** A gym-zone date ("YYYY-MM-DD") and time ("HH:MM") for an instant, as the form takes them. */
+  function gymDateTime(iso: string) {
+    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(iso));
+    const time = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(iso));
+    return { date, time };
+  }
+
+  async function openAddBooking(page: Page) {
+    await page.getByRole("button", { name: "Add a booking" }).click();
+    const form = page.getByRole("form", { name: "Add a booking" });
+    await expect(form).toBeVisible();
+    await expect(form.getByRole("heading", { name: "Add a booking" })).toBeFocused();
+    return form;
+  }
+
+  test("add a booking: a closed day at 10:15 for 45 minutes with only a name; axe, keyboard, 48px targets, focus", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const form = await openAddBooking(page);
+    await expect(form.getByLabel("Length")).toHaveValue("60");
+    await expectNoSeriousViolations(page, "/admin (add a booking form)");
+
+    // Tab walks the form's own controls in order, each 48px with a focus ring.
+    // (The date input takes one Tab each for month, day and year.)
+    const expected = [
+      "Client's name",
+      "Date",
+      "Start time",
+      "Length",
+      "Email (optional)",
+      "Phone (optional)",
+      "Note (optional)",
+      "Save booking",
+      "Close",
+    ];
+    const reached: string[] = [];
+    for (let i = 0; i < 20 && reached.length < expected.length; i++) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return {
+          label: ((el as HTMLInputElement).labels?.[0]?.textContent ?? el.textContent ?? "").trim(),
+          width: rect.width,
+          height: rect.height,
+          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
+        };
+      });
+      if (reached.at(-1) === stop.label) continue;
+      reached.push(stop.label);
+      expect(stop.height, `${stop.label} height`).toBeGreaterThanOrEqual(48);
+      expect(stop.width, `${stop.label} width`).toBeGreaterThanOrEqual(48);
+      expect(stop.outline, `${stop.label} focus ring`).toBe(true);
+    }
+    expect(reached).toEqual(expected);
+
+    // "Close" returns focus to Add a booking; reopen to fill it in.
+    await page.keyboard.press("Enter");
+    await expect(form).toBeHidden();
+    await expect(page.getByRole("button", { name: "Add a booking" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(form.getByRole("heading", { name: "Add a booking" })).toBeFocused();
+
+    // A Tuesday (closed on the public schedule), years out and random so reruns never collide.
+    let day = new Date(Date.UTC(2036, 0, 1, 12) + Math.floor(Math.random() * 3000) * 86_400_000);
+    while (day.getUTCDay() !== 2) day = new Date(day.getTime() + 86_400_000);
+    const name = `Pat ${ADDED_MARK}-${randomUUID().slice(0, 8)}`;
+    await form.getByLabel("Client's name").fill(name);
+    await form.getByLabel("Date").fill(day.toISOString().slice(0, 10));
+    await form.getByLabel("Start time").selectOption("10:15");
+    await form.getByLabel("Length").selectOption("45");
+    await form.getByRole("button", { name: "Save booking" }).click();
+
+    const status = page.getByRole("status").filter({ hasText: "Added Pat's session on" });
+    await expect(status).toHaveText(/^Added Pat's session on Tuesday, .+ at 10:15 AM\.$/);
+    await expect(status).toBeFocused();
+    await expect(form).toBeHidden();
+
+    const card = page.locator(".admin-booking").filter({ hasText: name });
+    await expect(card.locator(".source-tag")).toHaveText("Added by you");
+    await expect(card.locator(".status-badge")).toHaveText("Confirmed");
+    await expect(card).toContainText("No email given");
+    await expect(card).toContainText("10:15 AM to 11:00 AM");
+    await expect(card.locator('a[href^="mailto:"]')).toHaveCount(0);
+    await expectNoSeriousViolations(page, "/admin (after adding a booking)");
+    expect(await contrastRatio(card.locator(".source-tag")), "Added by you tag").toBeGreaterThanOrEqual(4.5);
+
+    // With no email on file, cancelling says so instead of offering to email.
+    await card.getByRole("button", { name: /^Cancel the booking for Pat/ }).click();
+    await expect(card.getByRole("form")).toContainText("There's no email for Pat, so please let them know yourself.");
+    await card.getByRole("button", { name: "Yes, cancel" }).click();
+    await expect(card.locator(".status-badge")).toHaveText("Cancelled");
+  });
+
+  test("add a booking: an exact clash is blocked; an overlap warns and can be saved anyway", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const row = await request.get(`${supabaseUrl}/rest/v1/booking_requests?id=eq.${seeded.bookingId}&select=starts_at`, {
+      headers: adminHeaders,
+    });
+    const [{ starts_at }] = (await row.json()) as { starts_at: string }[];
+    const at = gymDateTime(starts_at);
+    const quarterPast = gymDateTime(new Date(Date.parse(starts_at) + 15 * 60_000).toISOString());
+
+    const form = await openAddBooking(page);
+    const name = `Sam ${ADDED_MARK}-${randomUUID().slice(0, 8)}`;
+    await form.getByLabel("Client's name").fill(name);
+    await form.getByLabel("Date").fill(at.date);
+    await form.getByLabel("Start time").selectOption(at.time);
+    await form.getByRole("button", { name: "Save booking" }).click();
+    await expect(form.getByRole("alert")).toHaveText("Another booking already holds that time. Please choose another.");
+    await expect(form.getByRole("button", { name: "Save anyway" })).toHaveCount(0);
+
+    await form.getByLabel("Start time").selectOption(quarterPast.time);
+    await form.getByRole("button", { name: "Save booking" }).click();
+    const warning = form.getByRole("alert");
+    await expect(warning).toContainText(/^This overlaps Jordan's \d{1,2}:\d{2} [AP]M session\./);
+    await expectNoSeriousViolations(page, "/admin (overlap warning)");
+    expect(await contrastRatio(warning), "overlap warning").toBeGreaterThanOrEqual(4.5);
+
+    await form.getByRole("button", { name: "Save anyway" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Added Sam's session on" })).toBeFocused();
+    await expect(page.locator(".admin-booking").filter({ hasText: name }).locator(".source-tag")).toHaveText("Added by you");
+  });
 });

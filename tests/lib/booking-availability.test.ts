@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableDays, availabilityWindow, withoutTaken } from "@/lib/booking-availability";
+import { availableDays, availabilityWindow, gymTimeToUtc, withoutTaken } from "@/lib/booking-availability";
 
 // Thursday 2026-10-22 noon UTC = 8:00 in New York (EDT), so that day's 8:00
 // session has already started and only 9:30 is still offered.
@@ -104,5 +104,28 @@ describe("withoutTaken", () => {
   it("changes nothing when nothing is taken", () => {
     const days = availableDays(NOW);
     expect(withoutTaken(days, new Set())).toEqual(days);
+  });
+});
+
+describe("gymTimeToUtc", () => {
+  it("reads a summer date and time in the gym's zone (EDT, UTC-4)", () => {
+    expect(gymTimeToUtc("2030-07-11", "10:15")?.toISOString()).toBe("2030-07-11T14:15:00.000Z");
+  });
+
+  it("reads a winter date and time in the gym's zone (EST, UTC-5)", () => {
+    expect(gymTimeToUtc("2030-01-10", "08:00")?.toISOString()).toBe("2030-01-10T13:00:00.000Z");
+  });
+
+  it("gets the hour right just after the clocks go back", () => {
+    // 2030-11-03: EDT ends at 2:00 AM, so 3:30 AM is EST.
+    expect(gymTimeToUtc("2030-11-03", "03:30")?.toISOString()).toBe("2030-11-03T08:30:00.000Z");
+  });
+
+  it("returns null for a date or time that does not exist", () => {
+    expect(gymTimeToUtc("2030-02-30", "10:00")).toBeNull();
+    expect(gymTimeToUtc("2030-07-11", "24:00")).toBeNull();
+    expect(gymTimeToUtc("2030-07-11", "10:60")).toBeNull();
+    expect(gymTimeToUtc("next tuesday", "10:00")).toBeNull();
+    expect(gymTimeToUtc("2030-07-11", "10am")).toBeNull();
   });
 });

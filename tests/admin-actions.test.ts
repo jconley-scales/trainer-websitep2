@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { sendBookingConfirmation, sendBookingCancellation, db } = vi.hoisted(() => {
+const { sendBookingConfirmation, sendBookingCancellation, notifyTrainerOfBooking, db } = vi.hoisted(() => {
   /**
    * A stand-in for the Supabase query builder: every call chains, and awaiting
    * the chain gives the next of `db.queue`, else `db.result`. `db.calls`
@@ -12,10 +12,15 @@ const { sendBookingConfirmation, sendBookingCancellation, db } = vi.hoisted(() =
     user: { id: "u1" } as { id: string } | null,
     calls: [] as [string, unknown[]][],
   };
-  return { sendBookingConfirmation: vi.fn(), sendBookingCancellation: vi.fn(), db };
+  return {
+    sendBookingConfirmation: vi.fn(),
+    sendBookingCancellation: vi.fn(),
+    notifyTrainerOfBooking: vi.fn(),
+    db,
+  };
 });
 
-vi.mock("@/lib/notify", () => ({ sendBookingConfirmation, sendBookingCancellation }));
+vi.mock("@/lib/notify", () => ({ sendBookingConfirmation, sendBookingCancellation, notifyTrainerOfBooking }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(() => {
@@ -25,7 +30,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => {
     const chain: Record<string, unknown> = {};
-    for (const method of ["from", "update", "eq", "in", "select"]) {
+    for (const method of ["from", "update", "insert", "eq", "neq", "in", "lt", "gt", "order", "select"]) {
       chain[method] = (...args: unknown[]) => {
         db.calls.push([method, args]);
         return chain;
@@ -37,7 +42,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-import { cancelBooking, confirmBooking, setBookingStatus } from "@/app/admin/actions";
+import { addBooking, cancelBooking, confirmBooking, setBookingStatus } from "@/app/admin/actions";
 
 const ID = "2b9f6c1e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
 const ROW = {
@@ -53,6 +58,7 @@ beforeEach(() => {
   sendBookingConfirmation.mockResolvedValue(undefined);
   sendBookingCancellation.mockReset();
   sendBookingCancellation.mockResolvedValue(undefined);
+  notifyTrainerOfBooking.mockReset();
   db.queue = [];
   db.result = { data: [ROW], error: null };
   db.user = { id: "u1" };
@@ -123,6 +129,12 @@ describe("confirmBooking", () => {
       ok: false,
       error: "That booking could not be changed. Please refresh the page.",
     });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("confirms a booking that has no email (a reopened trainer booking) and says nobody was emailed", async () => {
+    db.result = { data: [{ ...ROW, email: null }], error: null };
+    expect(await confirmBooking(ID, "")).toEqual({ ok: true, emailed: null });
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
   });
 
@@ -229,6 +241,16 @@ describe("cancelBooking", () => {
     expect(sendBookingCancellation).not.toHaveBeenCalled();
   });
 
+  it("cancels a booking that has no email (added by the trainer) and says nobody was emailed", async () => {
+    db.queue = [
+      { data: [{ ...ROW, email: null, status: "confirmed" }], error: null },
+      { data: [{ id: ID }], error: null },
+    ];
+    expect(await cancelBooking(ID, "")).toEqual({ ok: true, emailed: null });
+    expect(db.calls).toContainEqual(["update", [{ status: "cancelled" }]]);
+    expect(sendBookingCancellation).not.toHaveBeenCalled();
+  });
+
   it("re-checks the session", async () => {
     db.user = null;
     await expect(cancelBooking(ID, "")).rejects.toThrow("NEXT_REDIRECT");
@@ -259,5 +281,176 @@ describe("setBookingStatus", () => {
     const result = await setBookingStatus(ID, "confirmed");
     expect(result).toMatchObject({ ok: false });
     expect(db.calls).toEqual([]);
+  });
+});
+
+describe("addBooking", () => {
+  /** Tuesday, October 22, 2030 (a closed day on the public schedule) at 10:15 AM for 45 minutes, name only. */
+  const PHONE_BOOKING = {
+    name: "Jane Doe",
+    email: "",
+    phone: "",
+    note: "",
+    date: "2030-10-22",
+    time: "10:15",
+    minutes: 45,
+  };
+  /** 10:15 AM EDT is 14:15 UTC. */
+  const STARTS = "2030-10-22T14:15:00.000Z";
+  const ENDS = "2030-10-22T15:00:00.000Z";
+
+  type Reply = { data: unknown[] | null; error: { code?: string } | null };
+
+  /** The live bookings that overlap the new one, then the result of the insert. */
+  function overlapping(rows: { name: string; starts_at: string }[], insert: Reply = { data: [{ id: ID }], error: null }) {
+    db.queue = [{ data: rows, error: null }, insert];
+  }
+
+  const inserts = () => db.calls.filter(([m]) => m === "insert");
+
+  it("saves a confirmed admin booking on a closed day, at any quarter hour, for any length, with only a name", async () => {
+    overlapping([]);
+    const result = await addBooking(PHONE_BOOKING);
+
+    expect(result).toEqual({ ok: true, emailed: null });
+    expect(inserts()).toEqual([
+      [
+        "insert",
+        [
+          {
+            name: "Jane Doe",
+            email: null,
+            phone: null,
+            note: null,
+            starts_at: STARTS,
+            ends_at: ENDS,
+            status: "confirmed",
+            source: "admin",
+          },
+        ],
+      ],
+    ]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("sends the client the Confirmed email when an email is given, and never the trainer's new-booking email", async () => {
+    overlapping([]);
+    const result = await addBooking({
+      ...PHONE_BOOKING,
+      email: " Jane@Example.com ",
+      phone: "555 010 2030",
+      note: "Knee is better now.",
+    });
+
+    expect(result).toEqual({ ok: true, emailed: true });
+    expect(inserts()[0][1][0]).toMatchObject({
+      email: "jane@example.com",
+      phone: "555 010 2030",
+      note: "Knee is better now.",
+    });
+    expect(sendBookingConfirmation).toHaveBeenCalledWith({
+      name: "Jane Doe",
+      email: "jane@example.com",
+      startsAt: STARTS,
+      endsAt: ENDS,
+      note: "",
+    });
+    expect(notifyTrainerOfBooking).not.toHaveBeenCalled();
+  });
+
+  it("keeps the booking and reports it when the Confirmed email fails", async () => {
+    overlapping([]);
+    sendBookingConfirmation.mockRejectedValue(new Error("SMTP down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await addBooking({ ...PHONE_BOOKING, email: "jane@example.com" })).toEqual({ ok: true, emailed: false });
+  });
+
+  it("blocks a booking at exactly the start time of a live booking, even when overlaps are allowed", async () => {
+    overlapping([{ name: "Sam Lee", starts_at: "2030-10-22T14:15:00+00:00" }]);
+    const result = await addBooking({ ...PHONE_BOOKING, allowOverlap: true });
+
+    expect(result).toEqual({ ok: false, error: "Another booking already holds that time. Please choose another." });
+    expect(inserts()).toEqual([]);
+  });
+
+  it("blocks the same way when another booking takes the time in the meantime", async () => {
+    overlapping([], { data: null, error: { code: "23505" } });
+    expect(await addBooking(PHONE_BOOKING)).toEqual({
+      ok: false,
+      error: "Another booking already holds that time. Please choose another.",
+    });
+  });
+
+  it("warns about an overlap, naming the other booking, and saves nothing", async () => {
+    overlapping([{ name: "Sam Lee", starts_at: "2030-10-22T13:30:00Z" }]);
+    const result = await addBooking(PHONE_BOOKING);
+
+    expect(result).toEqual({ ok: false, overlap: true, error: "This overlaps Sam's 9:30 AM session." });
+    expect(inserts()).toEqual([]);
+  });
+
+  it("names every overlapping booking", async () => {
+    overlapping([
+      { name: "Sam Lee", starts_at: "2030-10-22T13:30:00Z" },
+      { name: "Ana Ruiz", starts_at: "2030-10-22T14:45:00Z" },
+    ]);
+    expect(await addBooking(PHONE_BOOKING)).toMatchObject({
+      error: "This overlaps Sam's 9:30 AM session and Ana's 10:45 AM session.",
+    });
+  });
+
+  it("looks for overlaps among live bookings only", async () => {
+    overlapping([]);
+    await addBooking(PHONE_BOOKING);
+    expect(db.calls).toContainEqual(["neq", ["status", "cancelled"]]);
+    expect(db.calls).toContainEqual(["lt", ["starts_at", ENDS]]);
+    expect(db.calls).toContainEqual(["gt", ["ends_at", STARTS]]);
+  });
+
+  it("saves anyway after an overlap warning", async () => {
+    overlapping([{ name: "Sam Lee", starts_at: "2030-10-22T13:30:00Z" }]);
+    expect(await addBooking({ ...PHONE_BOOKING, allowOverlap: true })).toEqual({ ok: true, emailed: null });
+    expect(inserts()).toHaveLength(1);
+  });
+
+  it.each([
+    [{ name: "  " }, "Please enter the client's name."],
+    [{ name: "x".repeat(121) }, "Please shorten the name to 120 characters or fewer."],
+    [{ email: "jane@" }, "Please check the email address, or leave it blank."],
+    [{ phone: "1".repeat(41) }, "That phone number looks too long. Please check it."],
+    [{ note: "x".repeat(2001) }, "Please shorten the note to 2000 characters or fewer."],
+    [{ date: "2030-02-30" }, "Please choose a date and a start time."],
+    [{ time: "10:10" }, "Please choose a start time on the quarter hour."],
+    [{ minutes: 50 }, "Please choose how long the session is."],
+    [{ minutes: 0 }, "Please choose how long the session is."],
+    [{ date: "2020-01-07" }, "Please choose a time that hasn't passed yet."],
+  ])("rejects %o, saving and sending nothing", async (change, error) => {
+    overlapping([]);
+    expect(await addBooking({ ...PHONE_BOOKING, ...change })).toEqual({ ok: false, error });
+    expect(db.calls).toEqual([]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("rejects input that is not the right shape (posted by hand)", async () => {
+    expect(await addBooking(null as never)).toMatchObject({ ok: false });
+    expect(await addBooking({ ...PHONE_BOOKING, name: 42 } as never)).toMatchObject({ ok: false });
+    expect(await addBooking({ ...PHONE_BOOKING, minutes: "45" } as never)).toMatchObject({ ok: false });
+    expect(db.calls).toEqual([]);
+  });
+
+  it("reports a failed save without emailing anyone", async () => {
+    overlapping([], { data: null, error: { code: "42501" } });
+    expect(await addBooking({ ...PHONE_BOOKING, email: "jane@example.com" })).toEqual({
+      ok: false,
+      error: "Sorry, that did not save. Please try again.",
+    });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the session", async () => {
+    db.user = null;
+    await expect(addBooking(PHONE_BOOKING)).rejects.toThrow("NEXT_REDIRECT");
+    expect(inserts()).toEqual([]);
   });
 });

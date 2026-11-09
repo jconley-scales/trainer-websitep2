@@ -106,6 +106,10 @@ describe("dedicated public pages", () => {
     expect(text).toMatch(/never sell/i);
     // How long it is kept, and how to see or delete it.
     expect(doc.querySelector("h2#privacy-keeping")?.textContent).toBeTruthy();
+    // Bookings arranged by phone or message are recorded too, and kept as long.
+    expect(doc.querySelector("#privacy-keeping")?.closest(".privacy-section")?.textContent).toMatch(
+      /arrange a session by phone or message, I may record it here too, and it is kept for the same two years/,
+    );
     expect(text).toMatch(/see or delete/i);
     expect(doc.querySelector('main a[href="/contact"], section a[href="/contact"]')).not.toBeNull();
     // Health details are optional.

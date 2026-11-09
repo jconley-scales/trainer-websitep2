@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { firstName, formatDate, formatDayMonthTime, formatTimeRange } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
+import { AddBookingForm } from "./add-booking-form";
 import { BookingStatusButtons } from "./booking-status-buttons";
 
 export const metadata: Metadata = { title: "Bookings" };
@@ -12,13 +13,16 @@ export const metadata: Metadata = { title: "Bookings" };
 type Booking = {
   id: string;
   name: string;
-  email: string;
+  /** Null only for an admin booking, where email is optional. */
+  email: string | null;
   phone: string | null;
   note: string | null;
   starts_at: string;
   ends_at: string;
   status: "new" | "confirmed" | "cancelled";
   created_at: string;
+  /** "admin" when the trainer added it at /admin, "website" when requested on /book. */
+  source: "website" | "admin";
 };
 
 const STATUS_LABEL: Record<Booking["status"], string> = {
@@ -83,6 +87,8 @@ async function BookingList() {
 
   return (
     <>
+      <AddBookingForm />
+
       <p className="admin-summary">
         {newCount === 0
           ? "No new requests waiting."
@@ -119,7 +125,7 @@ async function loadBookings(
 ): Promise<{ upcoming: Booking[]; past: Booking[] } | null> {
   const { data, error } = await db
     .from("booking_requests")
-    .select("id, name, email, phone, note, starts_at, ends_at, status, created_at")
+    .select("id, name, email, phone, note, starts_at, ends_at, status, created_at, source")
     .order("starts_at", { ascending: true })
     .overrideTypes<Booking[], { merge: false }>();
   if (error) return null;
@@ -139,7 +145,10 @@ function BookingCards({ bookings, readOnly = false }: { bookings: Booking[]; rea
           <li key={b.id} className={`session-card admin-booking admin-booking--${b.status}`}>
             <div className="admin-booking-head">
               <h3 className="session-date">{date}</h3>
-              <span className={`status-badge status-badge--${b.status}`}>{STATUS_LABEL[b.status]}</span>
+              <span className="admin-booking-tags">
+                {b.source === "admin" ? <span className="source-tag">Added by you</span> : null}
+                <span className={`status-badge status-badge--${b.status}`}>{STATUS_LABEL[b.status]}</span>
+              </span>
             </div>
             <dl className="session-details">
               <div>
@@ -152,9 +161,7 @@ function BookingCards({ bookings, readOnly = false }: { bookings: Booking[]; rea
               </div>
               <div>
                 <dt>Email</dt>
-                <dd>
-                  <a href={`mailto:${b.email}`}>{b.email}</a>
-                </dd>
+                <dd>{b.email ? <a href={`mailto:${b.email}`}>{b.email}</a> : "No email given"}</dd>
               </div>
               <div>
                 <dt>Phone</dt>
@@ -167,7 +174,7 @@ function BookingCards({ bookings, readOnly = false }: { bookings: Booking[]; rea
                 </div>
               ) : null}
               <div>
-                <dt>Requested</dt>
+                <dt>{b.source === "admin" ? "Added" : "Requested"}</dt>
                 <dd>{formatDate(b.created_at)}</dd>
               </div>
             </dl>
@@ -178,6 +185,7 @@ function BookingCards({ bookings, readOnly = false }: { bookings: Booking[]; rea
                 who={`${b.name} on ${date}`}
                 clientFirstName={firstName(b.name)}
                 when={formatDayMonthTime(b.starts_at)}
+                hasEmail={b.email !== null}
               />
             )}
           </li>

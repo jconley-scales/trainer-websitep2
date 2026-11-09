@@ -122,3 +122,39 @@ describe("cancelling a booking", () => {
     expect(cancelBooking).not.toHaveBeenCalled();
   });
 });
+
+describe("cancelling a booking that has no email (added by the trainer)", () => {
+  function renderNoEmailBooking() {
+    render(
+      <BookingStatusButtons
+        id={ID}
+        status="confirmed"
+        who="Jordan Tester on Friday, October 25, 2030"
+        clientFirstName="Jordan"
+        when="Friday, October 25 at 9:00 AM"
+        hasEmail={false}
+      />,
+    );
+    fireEvent.click(cancelButton());
+  }
+
+  it("says nobody will be emailed, and asks for no reason to email", () => {
+    renderNoEmailBooking();
+
+    const panel = screen.getByRole("form", { name: QUESTION });
+    expect(panel).toHaveTextContent("There's no email for Jordan, so please let them know yourself.");
+    expect(screen.queryByLabelText(REASON)).toBeNull();
+    expect(screen.getByRole("button", { name: "Yes, cancel" })).toBeInTheDocument();
+  });
+
+  it("cancels and reminds the trainer to tell the client", async () => {
+    vi.mocked(cancelBooking).mockResolvedValue({ ok: true, emailed: null });
+    renderNoEmailBooking();
+    fireEvent.click(screen.getByRole("button", { name: "Yes, cancel" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Cancelled. There's no email for Jordan, so please let them know yourself.");
+    expect(cancelBooking).toHaveBeenCalledWith(ID, "");
+    await waitFor(() => expect(status).toHaveFocus());
+  });
+});

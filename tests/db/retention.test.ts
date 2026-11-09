@@ -6,8 +6,8 @@
  * hosted project.
  *
  * Each test runs in a transaction that is rolled back, so nothing it adds or
- * the job deletes is kept. Inside it, email is made nullable, standing in for
- * trainer-added bookings that may have no email.
+ * the job deletes is kept. Bookings with no email are admin bookings (only the
+ * trainer may leave email out, migration 0008).
  */
 import { Client } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,8 +38,9 @@ let seeded = 0;
 async function bookingFrom(ago: string, who: { email?: string; phone?: string } = {}) {
   seeded += 1;
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.booking_requests (name, email, phone, starts_at, ends_at, status)
-     select 'Pat Example', $1, $2, t, t + interval '1 hour', 'confirmed'
+    `insert into public.booking_requests (name, email, phone, starts_at, ends_at, status, source)
+     select 'Pat Example', $1::text, $2, t, t + interval '1 hour', 'confirmed',
+       case when $1::text is null then 'admin' else 'website' end
      from (select now() - $3::interval + make_interval(mins => $4, secs => 7) as t) s
      returning id`,
     [who.email ?? null, who.phone ?? null, ago, seeded],
@@ -65,7 +66,6 @@ describe.skipIf(!running)("retention job (local Supabase)", () => {
     db = new Client({ connectionString: LOCAL_DB_URL });
     await db.connect();
     await db.query("begin");
-    await db.query("alter table public.booking_requests alter column email drop not null");
   });
 
   afterEach(async () => {

@@ -113,7 +113,7 @@ export const SITE = {
    * and `updated`.
    */
   privacy: {
-    updated: "November 8, 2026",
+    updated: "November 9, 2026",
     /** Shown beside the booking and contact forms, linking here. */
     linkLabel: "How we use your details",
     lead: "What happens to the details you send me, in plain English.",
@@ -163,6 +163,7 @@ export const SITE = {
         paragraphs: [
           "Messages from the contact form are not stored on this website. They arrive in my email, and I keep them only as long as I need them to help you.",
           "I keep booking requests, and the emails about them, while we’re working together and for up to two years after your last session. Then I delete them. If you’d like yours deleted sooner, just ask.",
+          "If we arrange a session by phone or message, I may record it here too, and it is kept for the same two years.",
         ],
       },
       {

@@ -35,6 +35,7 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
 - `app/(marketing)/` — public pages: home, about, services, testimonials, contact, book
 - `app/(marketing)/book/actions.ts` — `submitBooking`, `getTakenTimes` server actions
 - `app/admin/` — trainer's bookings page + emailed-code sign-in
+- `app/admin/add-booking-form.tsx` — "Add a booking" (admin bookings, `addBooking`)
 - `proxy.ts` — Next 16's renamed middleware; gates `/admin` only
 - `lib/site.ts` — ALL site copy (name, trainer, services, prices, testimonials)
 - `lib/booking-availability.ts` — bookable slots (generated, not from the DB)
@@ -60,13 +61,23 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
 
 - There are no client accounts. Anyone can submit a `booking_requests` row; the
   anon role can INSERT only, never read, so visitors' contact details are never
-  served back through the site.
+  served back through the site. RLS limits that public insert to a new website
+  request (`source = 'website'`, `status = 'new'`).
+- Every row has a `source`: `'website'` (from /book) or `'admin'` (the trainer
+  added it at /admin with `addBooking`, migration `0008`). Email is required
+  unless `source = 'admin'` (a check constraint). Only admins may insert admin
+  bookings (RLS via `is_admin()`); they skip the slot schedule, are saved as
+  confirmed, and are exempt from the per-email cap. See
+  `docs/adr/0001-admin-bookings.md` and `GLOSSARY.md`.
 - Taken times come from the `taken_booking_times()` SECURITY DEFINER function,
   which returns times only, never who booked.
 - Double booking is prevented by a unique index on live start times; the
   actions turn Postgres error `23505` into a friendly "just taken" message.
-- Each email may hold at most 3 live future requests: a trigger (migration
-  `0006`) raises `PF001`, which `submitBooking` turns into a "you have a few
+- `addBooking` also blocks an exact start-time clash itself; a booking that
+  only overlaps another live one gets a warning naming it, and "Save anyway".
+- Each email may hold at most 3 live future website requests (admin bookings
+  neither count nor are capped): a trigger (migrations `0006`, `0008`) raises
+  `PF001`, which `submitBooking` turns into a "you have a few
   waiting" message. The booking form also has a hidden bot-trap field
   (`website`), like the contact form: when filled, report success, save nothing.
 - Admin access = signed in AND email in `admins` (`is_admin()`), enforced by row
@@ -77,6 +88,9 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   (`tests/db/` uses Supabase's public local-dev keys, pinned to 127.0.0.1.)
 - Booking email is sent in `after()` and failures are only logged: a mail
   problem must never delay or undo a saved booking. Email bodies are plain text.
+  An admin booking sends the client the Confirmed email only if it has an
+  email, and never sends the trainer a new-booking email. Bookings with no
+  email get no confirm/cancel email; the actions return `emailed: null`.
 
 ## Conventions
 
