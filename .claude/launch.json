@@ -6,6 +6,35 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "local-test",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/jason/AppData/Local/Temp/claude/ed99c9bf476c0a29/67f54c8f-9d53-4df3-b9d8-4b08cc95b7e9/scratchpad/dev-local.mjs",
+        "C:/Users/jason/trainer-websitep2"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "branch-test",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/jason/AppData/Local/Temp/claude/1b5d0817de168c9c/148e9674-1ed8-4601-9659-ce05d98e79de/scratchpad/dev-local.mjs",
+        "C:/Users/jason/trainer-websitep2/.claude/worktrees/supabase-deployment-setup-d6809a",
+        "--port=3002"
+      ],
+      "port": 3002
+    },
+    {
+      "name": "local-test-no-email",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/jason/AppData/Local/Temp/claude/ed99c9bf476c0a29/67f54c8f-9d53-4df3-b9d8-4b08cc95b7e9/scratchpad/dev-local.mjs",
+        "C:/Users/jason/trainer-websitep2",
+        "--no-email"
+      ],
+      "port": 3001
     }
   ]
 }
