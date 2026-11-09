@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BookingCalendar } from "@/components/marketing/BookingCalendar";
+import { HealthNote } from "@/components/marketing/HealthNote";
 import { PageHeader } from "@/components/marketing/PageHeader";
 import type { AvailableSlot } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
@@ -58,6 +59,7 @@ export function BookingFlow({ certifiedBy, priceNote }: { certifiedBy: string; p
             {priceNote}.{" "}
             <Link href="/pricing">See pricing</Link>
           </p>
+          <HealthNote />
           <BookingCalendar onBooked={setBooked} />
         </div>
       </section>

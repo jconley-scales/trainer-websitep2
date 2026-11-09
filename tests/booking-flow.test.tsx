@@ -20,6 +20,15 @@ describe("booking a session", () => {
     expect(link).toHaveAttribute("href", "/privacy");
   });
 
+  it("tells screen reader users to share only the health details they're comfortable emailing", async () => {
+    render(<BookPage />);
+    fireEvent.click((await screen.findAllByRole("button", { name: /available$/ }))[0]);
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".slot-row")!);
+    const note = screen.getByLabelText("Anything you would like me to know (optional)");
+    expect(note).toHaveAccessibleDescription(SITE.bookingNoteHint);
+    expect(SITE.bookingNoteHint).toMatch(/health details/);
+  });
+
   it("replaces the whole booking page with the thank-you once the request is in", async () => {
     render(<BookPage />);
 

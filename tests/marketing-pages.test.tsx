@@ -121,6 +121,18 @@ describe("dedicated public pages", () => {
     expect(note?.querySelector('a[href="/pricing"]')).not.toBeNull();
   });
 
+  it.each([
+    ["booking", BookPage],
+    ["contact", ContactPage],
+    ["pricing", PricingPage],
+  ] as const)("%s asks visitors to check with their doctor first", (_name, Page) => {
+    const doc = render(<Page />);
+    const notes = doc.querySelectorAll(".health-note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toBe(SITE.healthNote);
+    expect(SITE.healthNote).toMatch(/doctor/);
+  });
+
   it("booking reassures visitors with the trainer's certifying bodies", () => {
     const doc = render(<BookPage />);
     expect(doc.querySelector(".booking-certs")?.textContent).toBe("Certified by ACE & NASM");

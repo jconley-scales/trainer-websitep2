@@ -32,6 +32,12 @@ export const SITE = {
   /** Short trust line for places too small for the full certification list. */
   certifiedBy: "Certified by ACE & NASM",
   assessmentNote: "Your first session includes a 15-minute assessment.",
+  /** Shown on the booking, contact and pricing pages, where visitors decide to get started. */
+  healthNote:
+    "Before you start any new exercise program, it’s a good idea to check with your doctor, especially if you’re recovering from an illness or injury or living with a health condition. If they have any advice, bring it along and we’ll build it into your plan.",
+  /** Hint shown above the booking form's optional note field, read out with it by screen readers. */
+  bookingNoteHint:
+    "Please share only the health details you’re comfortable sending by email. We’ll go over the rest together during your first session’s assessment.",
   contactIntro:
     "Tell me a little about yourself and what you would like to achieve, and I will get back to you. Your first session includes a 15-minute assessment, so we start at exactly the right level for you.",
   /**

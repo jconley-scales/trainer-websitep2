@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HealthNote } from "@/components/marketing/HealthNote";
 import { formatUsd } from "@/lib/format";
 import { SITE } from "@/lib/site";
 import { sectionClass, titleClass, type SectionProps } from "./types";
@@ -65,7 +66,9 @@ export function PricingSection({
               See pricing details
             </Link>
           </p>
-        ) : null}
+        ) : (
+          <HealthNote />
+        )}
       </div>
     </section>
   );

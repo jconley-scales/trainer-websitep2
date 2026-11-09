@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
+import { HealthNote } from "@/components/marketing/HealthNote";
 import { PrivacyNote } from "@/components/marketing/PrivacyNote";
 import { submitContactMessage } from "@/app/(marketing)/contact/actions";
 import { SITE } from "@/lib/site";
@@ -62,6 +63,7 @@ export function ContactForm() {
         Ask a question or tell {SITE.trainerFirstName} about your goals. He will
         reply by email.
       </p>
+      <HealthNote />
       <PrivacyNote />
       <div className="field">
         <label htmlFor="contact-name">Your name</label>

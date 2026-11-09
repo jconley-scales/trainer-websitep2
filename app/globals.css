@@ -973,6 +973,22 @@ button.button--accent:hover:not(:disabled) {
   min-height: var(--min-target);
 }
 
+/* "Check with your doctor" note on the booking, contact and pricing pages. */
+.health-note {
+  max-width: 40rem;
+  margin: 0 0 2rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-line);
+  border-left: 6px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+}
+
+.contact-form .health-note {
+  margin: 0;
+}
+
 /* Privacy page (/privacy) */
 .privacy {
   max-width: var(--content-width);
@@ -1420,7 +1436,8 @@ button.slot-row.is-selected:hover:not(:disabled) {
   margin: 0.25rem 0 0;
 }
 
-.confirm-panel .field-hint {
+.confirm-panel .field-hint,
+.booking-form .field-hint {
   margin: 0;
   color: var(--color-text-muted);
 }

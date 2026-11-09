@@ -10,6 +10,7 @@ import {
   type AvailableSlot,
 } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
+import { SITE } from "@/lib/site";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
@@ -298,9 +299,13 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
             </div>
             <div className="field">
               <label htmlFor="booking-note">Anything you would like me to know (optional)</label>
+              <p id="booking-note-hint" className="field-hint">
+                {SITE.bookingNoteHint}
+              </p>
               <textarea
                 id="booking-note"
                 name="note"
+                aria-describedby="booking-note-hint"
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
