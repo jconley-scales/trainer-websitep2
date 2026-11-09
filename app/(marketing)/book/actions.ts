@@ -3,14 +3,24 @@
 import { after } from "next/server";
 import { availabilityWindow, availableDays } from "@/lib/booking-availability";
 import { notifyTrainerOfBooking } from "@/lib/notify";
+import { SITE } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UNIQUE_VIOLATION = "23505";
+/** Raised by the database when one email already holds too many live requests (migration 0006). */
+const TOO_MANY_LIVE_REQUESTS = "PF001";
 
 export type BookingResult =
   | { ok: true }
-  | { ok: false; error: string; taken?: boolean };
+  | {
+      ok: false;
+      error: string;
+      /** Someone else holds that time: the page refreshes the calendar. */
+      taken?: boolean;
+      /** This email already has the most waiting requests allowed: the page links to contact. */
+      limitReached?: boolean;
+    };
 
 export type BookingInput = {
   name: string;
@@ -19,6 +29,8 @@ export type BookingInput = {
   note: string;
   startsAt: string;
   endsAt: string;
+  /** Bot trap: hidden from people, so only bots fill it in. */
+  website?: string;
 };
 
 /**
@@ -42,9 +54,14 @@ export async function getTakenTimes(): Promise<number[]> {
  * everything: the contact fields, and that the chosen time is a real, still-open
  * slot (not an arbitrary time posted by hand). Writes with the anon client, so
  * row level security allows only the insert. The database's unique index turns
- * a time someone else already holds into a friendly "just taken" message.
+ * a time someone else already holds into a friendly "just taken" message, and
+ * its per-email limit on waiting requests into a friendly "you have a few
+ * waiting" one.
  */
 export async function submitBooking(input: BookingInput): Promise<BookingResult> {
+  // A bot filled the hidden field: pretend it worked, and save and send nothing.
+  if ((input.website ?? "").trim()) return { ok: true };
+
   const name = (input.name ?? "").trim();
   const email = (input.email ?? "").trim().toLowerCase();
   const phone = (input.phone ?? "").trim();
@@ -86,6 +103,13 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
         ok: false,
         error: "Sorry, someone has just booked that time. Please choose another.",
         taken: true,
+      };
+    }
+    if (error.code === TOO_MANY_LIVE_REQUESTS) {
+      return {
+        ok: false,
+        error: `You already have a few requests waiting. ${SITE.trainerFirstName} will be in touch soon, or send a message if you need to change one.`,
+        limitReached: true,
       };
     }
     return {

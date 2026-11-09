@@ -56,8 +56,10 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [website, setWebsite] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
+  const [limitReached, setLimitReached] = useState(false);
   // Shown above the calendar when the chosen time was taken in the meantime.
   const [takenNotice, setTakenNotice] = useState("");
 
@@ -103,11 +105,13 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
     if (!selectedSlot) return;
     setStep("submitting");
     setError("");
+    setLimitReached(false);
     const result = await submitBooking({
       name,
       email,
       phone,
       note,
+      website,
       startsAt: selectedSlot.startsAt,
       endsAt: selectedSlot.endsAt,
     });
@@ -124,6 +128,7 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
     } else {
       setStep("error");
       setError(result.error);
+      setLimitReached(Boolean(result.limitReached));
     }
   }
 
@@ -258,6 +263,12 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
           {step === "error" ? (
             <p className="error-message" role="alert">
               {error}
+              {limitReached ? (
+                <>
+                  {" "}
+                  <a href="/contact">Send {SITE.trainerFirstName} a message</a>
+                </>
+              ) : null}
             </p>
           ) : null}
 
@@ -309,6 +320,19 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
                 rows={4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
+            {/* Bot trap: off-screen and out of the tab order. */}
+            <div className="visually-hidden" aria-hidden="true">
+              <label htmlFor="booking-website">Leave this empty</label>
+              <input
+                id="booking-website"
+                name="website"
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
               />
             </div>
             <button type="submit" className="button button--accent button--lg" disabled={step === "submitting"}>
