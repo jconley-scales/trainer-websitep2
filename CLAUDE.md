@@ -1,0 +1,104 @@
+# Peak Form Training — trainer website
+
+Marketing site and booking system for a one-to-one personal trainer whose clients
+are mostly beginners and adults 50+. Visitors browse the site and request a
+session from a calendar; the trainer confirms or cancels requests at `/admin`.
+
+## Stack
+
+- Next.js 16 (App Router, `cacheComponents` on), React 19, TypeScript
+- Supabase (Postgres + Auth) via `@supabase/ssr` / `@supabase/supabase-js`
+- nodemailer (SMTP) for the new-booking email
+- Plain CSS in `app/globals.css` (design tokens on `:root`), no Tailwind/CSS framework
+- Vitest + Testing Library (jsdom) for unit tests; Playwright + axe for e2e/a11y
+
+## Commands
+
+```
+npm run dev:local                # http://localhost:3000 — local Supabase, no Gmail (use this)
+npm run dev                      # careful: .env.development.local, if present, points at production
+npm run build
+npm run lint
+npm test                         # vitest run (tests/**/*.test.ts[x])
+                                 # tests/db/ hit local Supabase; skipped if it's not running
+npm run test:e2e                 # playwright, starts its own dev server on :3100
+npm run admin:add -- you@x.com   # create the trainer's account + add to admins
+npx supabase start               # local Supabase; `npx supabase status` for keys
+npx supabase db reset            # re-apply supabase/migrations
+```
+
+Copy `.env.example` to `.env.local` and fill it in. Locally, booking emails land
+in the Supabase mail viewer at http://127.0.0.1:54324.
+
+## Layout
+
+- `app/(marketing)/` — public pages: home, about, services, testimonials, contact, book
+- `app/(marketing)/book/actions.ts` — `submitBooking`, `getTakenTimes` server actions
+- `app/admin/` — trainer's bookings page + emailed-code sign-in
+- `proxy.ts` — Next 16's renamed middleware; gates `/admin` only
+- `lib/site.ts` — ALL site copy (name, trainer, services, prices, testimonials)
+- `lib/booking-availability.ts` — bookable slots (generated, not from the DB)
+- `lib/format.ts` — `DISPLAY_TIME_ZONE` and date/time formatting
+- `lib/supabase/public.ts` — anon client (insert-only); `server.ts` — session client
+- `lib/notify.ts` — new-booking email
+- `components/marketing/` — page sections, `BookingCalendar`, `ContactForm`
+- `supabase/migrations/` — schema; `0001`/`0002` are from the old client-portal
+  design (`profiles`, `slots`, `bookings`) and are no longer used by the app
+
+## Placeholders still to replace
+
+- Everything in `lib/site.ts` is placeholder copy (Sarah Thompson, prices, quotes)
+- Schedule: `WEEKDAYS`, `TIMES`, `SESSION_MINUTES` in `lib/booking-availability.ts`
+- Time zone: `DISPLAY_TIME_ZONE` in `lib/format.ts` (currently America/New_York)
+- Privacy page (`SITE.privacy` in `lib/site.ts`) promises booking requests and
+  their emails are deleted two years after a client's last session. A nightly
+  pg_cron job (migration `0005`, grouping rewritten in `0007`) deletes the
+  database rows, treating bookings as one client by email, else phone digits,
+  else the row alone; the Gmail copies must be cleared by hand.
+
+## How data and security work
+
+- There are no client accounts. Anyone can submit a `booking_requests` row; the
+  anon role can INSERT only, never read, so visitors' contact details are never
+  served back through the site.
+- Taken times come from the `taken_booking_times()` SECURITY DEFINER function,
+  which returns times only, never who booked.
+- Double booking is prevented by a unique index on live start times; the
+  actions turn Postgres error `23505` into a friendly "just taken" message.
+- Each email may hold at most 3 live future requests: a trigger (migration
+  `0006`) raises `PF001`, which `submitBooking` turns into a "you have a few
+  waiting" message. The booking form also has a hidden bot-trap field
+  (`website`), like the contact form: when filled, report success, save nothing.
+- Admin access = signed in AND email in `admins` (`is_admin()`), enforced by row
+  level security. Public sign-up is off; accounts come only from `admin:add`.
+- Server actions are reachable by direct POST, so each re-validates its input
+  (and the session, for admin actions). Keep doing this.
+- The service role key is for `scripts/` only, never the running site.
+  (`tests/db/` uses Supabase's public local-dev keys, pinned to 127.0.0.1.)
+- Booking email is sent in `after()` and failures are only logged: a mail
+  problem must never delay or undo a saved booking. Email bodies are plain text.
+
+## Conventions
+
+- Audience is 60+: large type (18px base), WCAG 2.1 AA contrast, 48px minimum
+  tap targets, clear focus styles. New UI must meet these; e2e runs axe checks.
+- Motion lives only under `prefers-reduced-motion: no-preference`.
+- Use the existing CSS tokens in `globals.css` rather than new hard-coded colors.
+- Copy is warm, plain and reassuring; error messages say what to do next.
+  US spelling ("program").
+- Commits use conventional prefixes (`feat:`, `fix:`, `style:`, `chore:`).
+- `AGENTS.md` is regenerated by `next dev` and is git-ignored; don't commit it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on jconley-scales/trainer-websitep2 (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
