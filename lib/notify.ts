@@ -43,11 +43,14 @@ const sessionLines = (startsAt: string, endsAt: string) => [
   `    ${formatTimeRange(startsAt, endsAt)} (${formatTimeZoneName(startsAt)})`,
 ];
 
-/** The trainer's optional words, under their own heading, or nothing when blank. */
-const trainerNote = (note: string) => {
+/** The trainer's optional words under the given heading, or nothing when blank. */
+const trainerNote = (heading: string, note: string) => {
   const trimmed = note.trim();
-  return trimmed ? [`A note from ${SITE.trainerFirstName}:`, trimmed, ""] : [];
+  return trimmed ? [heading, trimmed, ""] : [];
 };
+
+/** How every email to a client ends: the trainer, then the business, on their own lines. */
+const signOff = ["Kind regards,", SITE.trainer, SITE.name];
 
 /** The mailer plus the trainer's address, or null when either is not configured. */
 function trainerMailer() {
@@ -181,11 +184,10 @@ export async function sendBookingConfirmation(booking: BookingConfirmation): Pro
     "",
     ...sessionLines(booking.startsAt, booking.endsAt),
     "",
-    ...trainerNote(booking.note),
+    ...trainerNote(`A note from ${SITE.trainerFirstName}:`, booking.note),
     "If you need to change or cancel, just reply to this email.",
     "",
-    "See you then,",
-    SITE.trainer,
+    ...signOff,
   ].join("\n");
 
   await m.transport.sendMail({
@@ -202,15 +204,16 @@ export type BookingCancellation = {
   email: string;
   startsAt: string;
   endsAt: string;
-  /** True if the session had been confirmed; false if it was still a new request being turned down. */
+  /** True if the session had been confirmed; false if it was still an unconfirmed request. */
   wasConfirmed: boolean;
   /** Optional reason from the trainer. Only ever emailed. */
   reason: string;
 };
 
 /**
- * Email a client that their request was turned down, or their confirmed session
- * cancelled. Same sender, layout and failure rules as sendBookingConfirmation:
+ * Email a client that their booking request, or their confirmed session, was
+ * cancelled, in formal wording with the trainer's optional reason under its own
+ * heading. Same sender, layout and failure rules as sendBookingConfirmation:
  * throws when email is not configured or sending fails.
  */
 export async function sendBookingCancellation(booking: BookingCancellation): Promise<void> {
@@ -218,18 +221,9 @@ export async function sendBookingCancellation(booking: BookingCancellation): Pro
   if (!m) {
     throw new Error("Cancellation email is not configured: set SMTP_HOST and BOOKING_FROM_EMAIL (or BOOKING_NOTIFY_EMAIL).");
   }
-  const bookUrl = `${siteUrl()}/book`;
-  const [lead, nextStep, label] = booking.wasConfirmed
-    ? [
-        "Your session has been cancelled:",
-        `If you'd like a new time, book again at ${bookUrl}, or reply to this email.`,
-        "Cancelled",
-      ]
-    : [
-        "I'm sorry, I can't make this time work:",
-        `Please pick another time at ${bookUrl}, or reply to this email.`,
-        "Can't make it",
-      ];
+  const lead = booking.wasConfirmed
+    ? "Your confirmed session has been cancelled."
+    : "Your booking request has been cancelled.";
 
   const text = [
     `Hi ${firstName(booking.name)},`,
@@ -238,18 +232,19 @@ export async function sendBookingCancellation(booking: BookingCancellation): Pro
     "",
     ...sessionLines(booking.startsAt, booking.endsAt),
     "",
-    ...trainerNote(booking.reason),
-    nextStep,
+    "We apologize for any inconvenience.",
     "",
-    "Best wishes,",
-    SITE.trainer,
+    ...trainerNote("Reason for cancellation:", booking.reason),
+    `If you would like to book another time, please visit ${siteUrl()}/book or reply to this email.`,
+    "",
+    ...signOff,
   ].join("\n");
 
   await m.transport.sendMail({
     from: m.from,
     to: oneLine(booking.email),
     replyTo: m.from,
-    subject: oneLine(`${label}: ${formatDayMonthTime(booking.startsAt)}`),
+    subject: oneLine(`Booking cancelled: ${formatDayMonthTime(booking.startsAt)}`),
     text,
   });
 }

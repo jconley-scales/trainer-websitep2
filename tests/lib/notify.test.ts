@@ -42,7 +42,7 @@ describe("sendBookingConfirmation", () => {
     expect(mail.html).toBeUndefined();
   });
 
-  it("leads with the day and time, in the display time zone with the zone named, and signs off as the trainer", async () => {
+  it("leads with the day and time, in the display time zone with the zone named, and signs off as the trainer and business", async () => {
     await sendBookingConfirmation({ ...BOOKING, note: "" });
 
     const mail = sendMail.mock.calls[0][0];
@@ -58,8 +58,9 @@ describe("sendBookingConfirmation", () => {
         "",
         "If you need to change or cancel, just reply to this email.",
         "",
-        "See you then,",
+        "Kind regards,",
         "Jervaughn Scales",
+        "My Older Fitness",
       ].join("\n"),
     );
   });
@@ -92,7 +93,7 @@ describe("sendBookingConfirmation", () => {
 });
 
 describe("sendBookingCancellation", () => {
-  it("turns down a new request: sorry, pick another time, signed by the trainer", async () => {
+  it("cancels an unconfirmed request formally, with a rebook link and the trainer and business sign-off", async () => {
     vi.stubEnv("SITE_URL", "https://myolderfitness.com/");
     await sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "" });
 
@@ -102,76 +103,83 @@ describe("sendBookingCancellation", () => {
     expect(mail.from).toBe("Booking <booking@example.com>");
     expect(mail.replyTo).toBe("Booking <booking@example.com>");
     expect(mail.html).toBeUndefined();
-    expect(mail.subject).toBe("Can't make it: Friday, October 25 at 9:00 AM");
+    expect(mail.subject).toBe("Booking cancelled: Friday, October 25 at 9:00 AM");
     expect(mail.text).toBe(
       [
         "Hi Jordan,",
         "",
-        "I'm sorry, I can't make this time work:",
+        "Your booking request has been cancelled.",
         "",
         "    Friday, October 25",
         "    9:00 AM to 10:00 AM (Eastern time)",
         "",
-        "Please pick another time at https://myolderfitness.com/book, or reply to this email.",
+        "We apologize for any inconvenience.",
         "",
-        "Best wishes,",
+        "If you would like to book another time, please visit https://myolderfitness.com/book or reply to this email.",
+        "",
+        "Kind regards,",
         "Jervaughn Scales",
+        "My Older Fitness",
       ].join("\n"),
     );
   });
 
-  it("cancels a confirmed session, offering to book again", async () => {
+  it("cancels a confirmed session with the same subject and layout, saying it was confirmed", async () => {
     vi.stubEnv("SITE_URL", "https://myolderfitness.com");
     await sendBookingCancellation({ ...BOOKING, wasConfirmed: true, reason: "" });
 
     const mail = sendMail.mock.calls[0][0];
-    expect(mail.subject).toBe("Cancelled: Friday, October 25 at 9:00 AM");
+    expect(mail.subject).toBe("Booking cancelled: Friday, October 25 at 9:00 AM");
     expect(mail.text).toBe(
       [
         "Hi Jordan,",
         "",
-        "Your session has been cancelled:",
+        "Your confirmed session has been cancelled.",
         "",
         "    Friday, October 25",
         "    9:00 AM to 10:00 AM (Eastern time)",
         "",
-        "If you'd like a new time, book again at https://myolderfitness.com/book, or reply to this email.",
+        "We apologize for any inconvenience.",
         "",
-        "Best wishes,",
+        "If you would like to book another time, please visit https://myolderfitness.com/book or reply to this email.",
+        "",
+        "Kind regards,",
         "Jervaughn Scales",
+        "My Older Fitness",
       ].join("\n"),
     );
   });
 
-  it("includes the reason when turning down a new request", async () => {
-    await sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "I'm away that week." });
-
-    const { text } = sendMail.mock.calls[0][0];
-    expect(text).toContain(
-      [
-        "    9:00 AM to 10:00 AM (Eastern time)",
-        "",
-        "A note from Jervaughn:",
-        "I'm away that week.",
-        "",
-        "Please pick another time at http://localhost:3000/book, or reply to this email.",
-      ].join("\n"),
-    );
-  });
-
-  it("includes the trainer's reason under its own line when one is given", async () => {
+  it("gives the trainer's reason under its own heading, after the apology, when one is given", async () => {
     await sendBookingCancellation({ ...BOOKING, wasConfirmed: true, reason: "  I'm unwell this week.  " });
 
     const { text } = sendMail.mock.calls[0][0];
     expect(text).toContain(
       [
-        "    9:00 AM to 10:00 AM (Eastern time)",
+        "We apologize for any inconvenience.",
         "",
-        "A note from Jervaughn:",
+        "Reason for cancellation:",
         "I'm unwell this week.",
         "",
-        "If you'd like a new time, book again at http://localhost:3000/book, or reply to this email.",
+        "If you would like to book another time, please visit http://localhost:3000/book or reply to this email.",
       ].join("\n"),
+    );
+  });
+
+  it("gives the reason when cancelling an unconfirmed request too", async () => {
+    await sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "I'm away that week." });
+
+    const { text } = sendMail.mock.calls[0][0];
+    expect(text).toContain("Reason for cancellation:\nI'm away that week.\n");
+  });
+
+  it("leaves the reason section out entirely when the reason is blank", async () => {
+    await sendBookingCancellation({ ...BOOKING, wasConfirmed: false, reason: "   \n " });
+
+    const { text } = sendMail.mock.calls[0][0];
+    expect(text).not.toContain("Reason for cancellation");
+    expect(text).toContain(
+      "We apologize for any inconvenience.\n\nIf you would like to book another time",
     );
   });
 
