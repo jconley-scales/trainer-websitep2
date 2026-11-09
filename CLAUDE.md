@@ -70,7 +70,10 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   confirmed, and are exempt from the per-email cap. See
   `docs/adr/0001-admin-bookings.md` and `GLOSSARY.md`.
 - Taken times come from the `taken_booking_times()` SECURITY DEFINER function,
-  which returns times only, never who booked.
+  which returns each live booking's start and end only, never who booked
+  (migration `0009`). The calendar hides every slot a booking overlaps, and
+  `submitBooking` refuses one too, since admin bookings can start at any
+  quarter hour.
 - Double booking is prevented by a unique index on live start times; the
   actions turn Postgres error `23505` into a friendly "just taken" message.
 - `addBooking` also blocks an exact start-time clash itself; a booking that

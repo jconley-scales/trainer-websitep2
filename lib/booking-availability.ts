@@ -136,15 +136,29 @@ export function availabilityWindow(now: Date): { from: Date; to: Date } {
 }
 
 /**
- * Drop the slots that are already taken (by start instant), and any day left
- * with no slots. `taken` holds epoch milliseconds, so ISO strings in different
- * formats (".000Z" vs "+00:00") still compare equal.
+ * A time already held by a live booking: its start and end as epoch
+ * milliseconds, so ISO strings in different formats (".000Z" vs "+00:00")
+ * still compare correctly. Says nothing about who booked it.
  */
-export function withoutTaken(days: AvailableDay[], taken: ReadonlySet<number>): AvailableDay[] {
+export type TakenTime = { start: number; end: number };
+
+/** True when the slot and the taken time share any moment (touching end to start is fine). */
+export function overlapsTaken(slot: AvailableSlot, taken: readonly TakenTime[]): boolean {
+  const start = Date.parse(slot.startsAt);
+  const end = Date.parse(slot.endsAt);
+  return taken.some((t) => start < t.end && end > t.start);
+}
+
+/**
+ * Drop the slots that overlap a taken time, and any day left with no slots.
+ * Overlap, not just the same start: the trainer can add a booking at any
+ * quarter hour (an admin booking), which may cover part of a public slot.
+ */
+export function withoutTaken(days: AvailableDay[], taken: readonly TakenTime[]): AvailableDay[] {
   return days
     .map((day) => ({
       ...day,
-      slots: day.slots.filter((slot) => !taken.has(Date.parse(slot.startsAt))),
+      slots: day.slots.filter((slot) => !overlapsTaken(slot, taken)),
     }))
     .filter((day) => day.slots.length > 0);
 }

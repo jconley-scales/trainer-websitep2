@@ -62,14 +62,18 @@ async function signedInUser(isAdmin: boolean): Promise<{ db: SupabaseClient; ema
   return { db, email, id: data.user.id };
 }
 
-async function takenTimes(at: string): Promise<number[]> {
-  const t = Date.parse(at);
+/** What the public calendar is told is taken between two instants: times only, as epoch ms. */
+async function takenBetween(from: number, to: number): Promise<{ start: number; end: number }[]> {
   const { data, error } = await anon.rpc("taken_booking_times", {
-    p_from: new Date(t - MINUTE).toISOString(),
-    p_to: new Date(t + MINUTE).toISOString(),
+    p_from: new Date(from).toISOString(),
+    p_to: new Date(to).toISOString(),
   });
   expect(error).toBeNull();
-  return (data as string[]).map((s) => Date.parse(s));
+  return (data as Record<string, string>[]).map((row) => {
+    // Only the times: never who booked.
+    expect(Object.keys(row).sort()).toEqual(["ends_at", "starts_at"]);
+    return { start: Date.parse(row.starts_at), end: Date.parse(row.ends_at) };
+  });
 }
 
 describe.skipIf(!running)("admin bookings (local Supabase)", () => {
@@ -104,11 +108,23 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     expect(data).toEqual([{ status: "confirmed", source: "admin", email: null }]);
   });
 
-  it("shows an admin booking's time as taken on the public calendar", async () => {
-    const time = freeTime();
+  it("shows an admin booking's whole time, start to end, as taken on the public calendar", async () => {
+    const time = freeTime(45);
     await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin" });
+    const start = Date.parse(time.starts_at);
+    const end = Date.parse(time.ends_at);
 
-    expect(await takenTimes(time.starts_at)).toEqual([Date.parse(time.starts_at)]);
+    expect(await takenBetween(start - MINUTE, start + MINUTE)).toEqual([{ start, end }]);
+  });
+
+  it("includes a booking that starts before the window but runs into it", async () => {
+    const time = freeTime(45);
+    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin" });
+    const start = Date.parse(time.starts_at);
+    const end = Date.parse(time.ends_at);
+
+    expect(await takenBetween(start + 30 * MINUTE, start + 120 * MINUTE)).toEqual([{ start, end }]);
+    expect(await takenBetween(end, end + 60 * MINUTE)).toEqual([]);
   });
 
   it("still rejects a website booking with no email, even from the trainer", async () => {

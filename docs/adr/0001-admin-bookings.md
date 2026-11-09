@@ -7,4 +7,4 @@ The trainer arranges some sessions directly with clients by phone or text, often
 - Each row records its **source** (`website` / `admin`), and the database rules (email required, the cap, who may insert) key off it.
 - With no slot grid to line up against, two admin bookings can overlap. An exact start-time clash is still blocked by the one-live-booking-per-time index; an overlap only warns, and the trainer may save anyway.
 - A booking with no email gets no confirmation or cancellation email: the trainer tells the client themself.
-- The public calendar hides a slot only when a live booking starts at exactly that time, so an admin booking at an off-schedule time (e.g. 9:45) does not hide the overlapping public slot (9:30).
+- The public calendar can't match slots by start time alone: an admin booking at 9:45 must hide the 9:30 slot it covers. So taken times carry an end as well as a start, and the calendar and `submitBooking` both treat any overlap as taken.

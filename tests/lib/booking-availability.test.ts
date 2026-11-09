@@ -81,21 +81,42 @@ describe("availability", () => {
 });
 
 describe("withoutTaken", () => {
+  const MINUTE = 60 * 1000;
+  /** A booked time, from its ISO start and length in minutes. */
+  const booked = (startIso: string, minutes = 60) => ({
+    start: Date.parse(startIso),
+    end: Date.parse(startIso) + minutes * MINUTE,
+  });
+  // Saturday 2026-10-24, which has several slots (8:00, 9:30, 11:00 … in New York), so the day itself stays.
+  const saturday = () => availableDays(NOW).find((d) => d.date === "2026-10-24")!;
+
   it("drops a taken slot, matching instants whatever the ISO format", () => {
     const days = availableDays(NOW);
-    // Saturday, which has several slots, so the day itself stays.
-    const saturday = days.find((d) => d.date === "2026-10-24")!;
-    const first = saturday.slots[0];
+    const first = saturday().slots[0];
     // The database returns "+00:00" offsets rather than ".000Z".
-    const taken = new Set([Date.parse(first.startsAt.replace(".000Z", "+00:00"))]);
-    const after = withoutTaken(days, taken).find((d) => d.date === saturday.date)!;
+    const taken = [booked(first.startsAt.replace(".000Z", "+00:00"))];
+    const after = withoutTaken(days, taken).find((d) => d.date === "2026-10-24")!;
     expect(after.slots.map((s) => s.id)).not.toContain(first.id);
-    expect(after.slots).toHaveLength(saturday.slots.length - 1);
+    expect(after.slots).toHaveLength(saturday().slots.length - 1);
+  });
+
+  it("drops a slot that a booking at another time overlaps (e.g. the trainer's 9:45 session)", () => {
+    // 9:45 to 10:45 New York (EDT) overlaps the 9:30 to 10:30 slot only.
+    const taken = [booked("2026-10-24T13:45:00Z", 60)];
+    const after = withoutTaken(availableDays(NOW), taken).find((d) => d.date === "2026-10-24")!;
+    expect(after.slots.map((s) => localTime(s.startsAt))).toEqual(["08:00", "11:00", "12:30", "14:00", "15:30"]);
+  });
+
+  it("keeps a slot that a booking only touches end to start", () => {
+    // 10:30 to 11:00 New York sits exactly between the 9:30 and 11:00 slots.
+    const taken = [booked("2026-10-24T14:30:00Z", 30)];
+    const after = withoutTaken(availableDays(NOW), taken).find((d) => d.date === "2026-10-24")!;
+    expect(after.slots).toHaveLength(saturday().slots.length);
   });
 
   it("drops a day once all its slots are taken", () => {
     const days = availableDays(NOW);
-    const taken = new Set(days[0].slots.map((s) => Date.parse(s.startsAt)));
+    const taken = days[0].slots.map((s) => booked(s.startsAt));
     const result = withoutTaken(days, taken);
     expect(result.map((d) => d.date)).not.toContain(days[0].date);
     expect(result).toHaveLength(days.length - 1);
@@ -103,7 +124,7 @@ describe("withoutTaken", () => {
 
   it("changes nothing when nothing is taken", () => {
     const days = availableDays(NOW);
-    expect(withoutTaken(days, new Set())).toEqual(days);
+    expect(withoutTaken(days, [])).toEqual(days);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   withoutTaken,
   type AvailableDay,
   type AvailableSlot,
+  type TakenTime,
 } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
 import { SITE } from "@/lib/site";
@@ -36,13 +37,13 @@ function monthGrid(year: number, month: number): number[][] {
   return weeks;
 }
 
-/** Offered times minus the ones already booked, including `alsoTaken` (this
+/** Offered times minus any a booking overlaps, including `alsoTaken` (this
  *  visit's own requests, in case the lookup is behind or fails). If the lookup
  *  fails, offer the rest: the database still refuses a time that is taken. */
 async function loadAvailableDays(alsoTaken: readonly AvailableSlot[]): Promise<AvailableDay[]> {
-  const taken = await getTakenTimes().catch(() => [] as number[]);
-  const all = new Set([...taken, ...alsoTaken.map((slot) => Date.parse(slot.startsAt))]);
-  return withoutTaken(availableDays(new Date()), all);
+  const taken = await getTakenTimes().catch(() => [] as TakenTime[]);
+  const own = alsoTaken.map((slot) => ({ start: Date.parse(slot.startsAt), end: Date.parse(slot.endsAt) }));
+  return withoutTaken(availableDays(new Date()), [...taken, ...own]);
 }
 
 /** The contact details a visitor gives, kept (in memory only) so they can book

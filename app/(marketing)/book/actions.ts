@@ -1,7 +1,7 @@
 "use server";
 
 import { after } from "next/server";
-import { availabilityWindow, availableDays } from "@/lib/booking-availability";
+import { availabilityWindow, availableDays, overlapsTaken, type TakenTime } from "@/lib/booking-availability";
 import { notifyTrainerOfBooking } from "@/lib/notify";
 import { SITE } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -34,25 +34,33 @@ export type BookingInput = {
 };
 
 /**
- * The start instants (epoch ms) already held by a live booking, over the window
- * the booking page shows. Goes through the SECURITY DEFINER function, which
- * returns times only — never who booked them. On failure returns [] so the page
- * still works; the unique index is what really prevents double booking.
+ * The times (start and end) held by live bookings that overlap `from`–`to`,
+ * through the SECURITY DEFINER function, which returns times only — never who
+ * booked them. Null if the lookup fails.
  */
-export async function getTakenTimes(): Promise<number[]> {
+async function takenBetween(from: string, to: string): Promise<TakenTime[] | null> {
+  const { data, error } = await createPublicClient().rpc("taken_booking_times", { p_from: from, p_to: to });
+  if (error || !Array.isArray(data)) return null;
+  return (data as { starts_at: string; ends_at: string }[])
+    .map((row) => ({ start: Date.parse(row.starts_at), end: Date.parse(row.ends_at) }))
+    .filter((t) => !Number.isNaN(t.start) && !Number.isNaN(t.end));
+}
+
+/**
+ * The times already held by a live booking, over the window the booking page
+ * shows, so it can hide every slot they overlap. On failure returns [] so the
+ * page still works; submitBooking checks again, and the unique index is what
+ * really prevents two bookings at one start time.
+ */
+export async function getTakenTimes(): Promise<TakenTime[]> {
   const { from, to } = availabilityWindow(new Date());
-  const { data, error } = await createPublicClient().rpc("taken_booking_times", {
-    p_from: from.toISOString(),
-    p_to: to.toISOString(),
-  });
-  if (error || !Array.isArray(data)) return [];
-  return (data as string[]).map((t) => Date.parse(t)).filter((t) => !Number.isNaN(t));
+  return (await takenBetween(from.toISOString(), to.toISOString())) ?? [];
 }
 
 /**
  * Save a public booking request. Reachable by direct POST, so it re-validates
  * everything: the contact fields, and that the chosen time is a real, still-open
- * slot (not an arbitrary time posted by hand). Writes with the anon client, so
+ * slot (not an arbitrary time posted by hand) that no live booking overlaps. Writes with the anon client, so
  * row level security allows only the insert. The database's unique index turns
  * a time someone else already holds into a friendly "just taken" message, and
  * its per-email limit on waiting requests into a friendly "you have a few
@@ -88,6 +96,18 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
     return { ok: false, error: "That time is no longer available. Please choose another.", taken: true };
   }
 
+  const justTaken = {
+    ok: false,
+    error: "Sorry, someone has just booked that time. Please choose another.",
+    taken: true,
+  } as const;
+
+  // The unique index only catches a booking at the same start time; one the
+  // trainer added at another time may still cover part of this slot. If the
+  // lookup fails, carry on: the index still guards the start time.
+  const taken = await takenBetween(slot.startsAt, slot.endsAt);
+  if (taken && overlapsTaken(slot, taken)) return justTaken;
+
   const db = createPublicClient();
   const { error } = await db.from("booking_requests").insert({
     name,
@@ -98,13 +118,7 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
     ends_at: slot.endsAt,
   });
   if (error) {
-    if (error.code === UNIQUE_VIOLATION) {
-      return {
-        ok: false,
-        error: "Sorry, someone has just booked that time. Please choose another.",
-        taken: true,
-      };
-    }
+    if (error.code === UNIQUE_VIOLATION) return justTaken;
     if (error.code === TOO_MANY_LIVE_REQUESTS) {
       return {
         ok: false,

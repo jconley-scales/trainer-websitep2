@@ -23,7 +23,7 @@ vi.mock("@/lib/notify", () => ({ notifyTrainerOfBooking }));
 vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
 
 import { getTakenTimes, submitBooking } from "@/app/(marketing)/book/actions";
-import { availableDays, type AvailableSlot } from "@/lib/booking-availability";
+import { availableDays, overlapsTaken, type AvailableSlot } from "@/lib/booking-availability";
 import { SITE } from "@/lib/site";
 
 const admin = createClient(LOCAL_URL, LOCAL_SERVICE_KEY, { auth: { persistSession: false } });
@@ -34,14 +34,16 @@ const running = await fetch(`${LOCAL_URL}/rest/v1/`, { headers: { apikey: LOCAL_
   .catch(() => false);
 
 const TEST_DOMAIN = "guards.example.test";
+/** Marks the admin bookings these tests add (they have no email to clean up by). */
+const TRAINER_ADDED = "[guards-admin-booking]";
 const email = (who: string) => `${who}-${Date.now()}@${TEST_DOMAIN}`;
 
 /** Future slots nobody holds yet. */
 async function freeSlots(count: number): Promise<AvailableSlot[]> {
-  const taken = new Set(await getTakenTimes());
+  const taken = await getTakenTimes();
   const free = availableDays(new Date())
     .flatMap((d) => d.slots)
-    .filter((s) => !taken.has(Date.parse(s.startsAt)));
+    .filter((s) => !overlapsTaken(s, taken));
   if (free.length < count) throw new Error(`Need ${count} free slots, found ${free.length}`);
   return free.slice(0, count);
 }
@@ -51,7 +53,7 @@ function booking(slot: AvailableSlot, who: string, extra: { website?: string } =
 }
 
 async function isTaken(slot: AvailableSlot) {
-  return (await getTakenTimes()).includes(Date.parse(slot.startsAt));
+  return overlapsTaken(slot, await getTakenTimes());
 }
 
 describe.skipIf(!running)("booking spam guards (local Supabase)", () => {
@@ -62,6 +64,7 @@ describe.skipIf(!running)("booking spam guards (local Supabase)", () => {
   afterEach(async () => {
     notifyTrainerOfBooking.mockReset();
     await admin.from("booking_requests").delete().ilike("email", `%@${TEST_DOMAIN}%`);
+    await admin.from("booking_requests").delete().like("name", `%${TRAINER_ADDED}%`);
   });
 
   it("tells a bot its request went through, but saves nothing and emails nobody", async () => {
@@ -134,5 +137,29 @@ describe.skipIf(!running)("booking spam guards (local Supabase)", () => {
       error: "Sorry, someone has just booked that time. Please choose another.",
       taken: true,
     });
+  });
+
+  it("hides a slot that an admin booking at another time overlaps, and refuses a request for it", async () => {
+    const [slot] = await freeSlots(1);
+    // The trainer's phone booking starts 15 minutes into the slot.
+    const start = Date.parse(slot.startsAt) + 15 * 60_000;
+    const { error: seedError } = await admin.from("booking_requests").insert({
+      name: `Pat ${TRAINER_ADDED}`,
+      starts_at: new Date(start).toISOString(),
+      ends_at: new Date(start + 45 * 60_000).toISOString(),
+      status: "confirmed",
+      source: "admin",
+    });
+    expect(seedError).toBeNull();
+    expect(await isTaken(slot)).toBe(true);
+
+    const result = await submitBooking(booking(slot, email("overlap")));
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Sorry, someone has just booked that time. Please choose another.",
+      taken: true,
+    });
+    expect(notifyTrainerOfBooking).not.toHaveBeenCalled();
   });
 });
