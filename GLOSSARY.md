@@ -25,3 +25,10 @@ _Avoid_: Origin, channel
 
 **Live booking**:
 A booking that has not been cancelled.
+
+**Move**:
+Change a booking's time (its start or length). Moving a booking request also confirms it.
+_Avoid_: Reschedule
+
+**Edited**:
+A booking whose details or time the trainer has changed since it was made; only the time of the last edit is kept.

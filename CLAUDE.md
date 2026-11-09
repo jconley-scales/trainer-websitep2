@@ -36,6 +36,8 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
 - `app/(marketing)/book/actions.ts` — `submitBooking`, `getTakenTimes` server actions
 - `app/admin/` — trainer's bookings page + emailed-code sign-in
 - `app/admin/add-booking-form.tsx` — "Add a booking" (admin bookings, `addBooking`)
+- `app/admin/edit-booking.tsx` — "Edit" on a booking card (`editBooking`); shares
+  `booking-fields.tsx` with the add form
 - `proxy.ts` — Next 16's renamed middleware; gates `/admin` only
 - `lib/site.ts` — ALL site copy (name, trainer, services, prices, testimonials)
 - `lib/booking-availability.ts` — bookable slots (generated, not from the DB)
@@ -78,6 +80,14 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   actions turn Postgres error `23505` into a friendly "just taken" message.
 - `addBooking` also blocks an exact start-time clash itself; a booking that
   only overlaps another live one gets a warning naming it, and "Save anyway".
+- The trainer can edit or move a live booking that hasn't started (`editBooking`,
+  migration `0010`): admins may update name, email, phone, note, start and end,
+  never `source`. A trigger stamps `updated_at` (the "Edited" tag) when any of
+  those change and raises `PF002` for a cancelled or started booking. A new
+  time follows the add rules (clash blocked, overlap warned). Changing details
+  only emails nobody; moving a confirmed booking sends "Your session has moved"
+  (`sendBookingMoved`); moving a new request also confirms it and sends the
+  Confirmed email. "Don't email the client" suppresses either.
 - Each email may hold at most 3 live future website requests (admin bookings
   neither count nor are capped): a trigger (migrations `0006`, `0008`) raises
   `PF001`, which `submitBooking` turns into a "you have a few

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { gymTimeToUtc } from "@/lib/booking-availability";
 import { firstName, formatTime } from "@/lib/format";
-import { sendBookingCancellation, sendBookingConfirmation } from "@/lib/notify";
+import { sendBookingCancellation, sendBookingConfirmation, sendBookingMoved } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import {
   BOOKING_EMAIL_MAX,
@@ -35,6 +35,8 @@ const STATUSES = ["new"] as const;
 type Status = (typeof STATUSES)[number];
 
 const UNIQUE_VIOLATION = "23505";
+// Raised by the database (migration 0010) when a cancelled or started booking is edited.
+const NOT_EDITABLE = "PF002";
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -264,22 +266,23 @@ export type AddBookingResult =
 
 const CLASH = "Another booking already holds that time. Please choose another.";
 
+type ParsedBooking = {
+  name: string;
+  email: string;
+  phone: string;
+  note: string;
+  startsAt: string;
+  endsAt: string;
+};
+
 /**
- * Add an admin booking: one the trainer arranged with a client by phone or
- * text. Any future date and quarter-hour time, not just the public schedule;
- * saved as confirmed; no per-email cap (see docs/adr/0001-admin-bookings.md).
- *
- * Reachable by direct POST, so it re-checks every field and the session; the
- * insert runs as the signed-in user, so row level security only lets an admin
- * add it. A live booking at the exact same start blocks it (as the database's
- * unique index would); one that merely overlaps is named in a warning, unless
- * `allowOverlap` is set.
- *
- * If an email is given the client gets the Confirmed email, and, like
- * confirmBooking, this waits for it and the booking stays saved either way.
- * The trainer gets no new-booking email: they added it themself.
+ * Check and tidy the booking form's fields, as posted (so anything may arrive):
+ * the shared rules for adding and editing a booking. The time must be a future
+ * quarter hour, for one of BOOKING_LENGTHS.
  */
-export async function addBooking(input: AddBookingInput): Promise<AddBookingResult> {
+function parseBookingFields(
+  input: AddBookingInput,
+): ({ ok: true } & ParsedBooking) | { ok: false; error: string } {
   const fail = (error: string) => ({ ok: false, error }) as const;
   if (
     !input ||
@@ -289,7 +292,7 @@ export async function addBooking(input: AddBookingInput): Promise<AddBookingResu
     ) ||
     typeof input.minutes !== "number"
   ) {
-    return fail("That booking could not be added.");
+    return fail("That booking could not be saved.");
   }
 
   const name = input.name.trim();
@@ -316,8 +319,70 @@ export async function addBooking(input: AddBookingInput): Promise<AddBookingResu
   if (!BOOKING_LENGTHS.includes(input.minutes)) return fail("Please choose how long the session is.");
   if (start.getTime() <= Date.now()) return fail("Please choose a time that hasn't passed yet.");
 
-  const startsAt = start.toISOString();
-  const endsAt = new Date(start.getTime() + input.minutes * 60_000).toISOString();
+  return {
+    ok: true,
+    name,
+    email,
+    phone,
+    note,
+    startsAt: start.toISOString(),
+    endsAt: new Date(start.getTime() + input.minutes * 60_000).toISOString(),
+  };
+}
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Why a booking may not be saved at startsAt–endsAt, or null when it may: a
+ * live booking at the exact same start blocks it (as the database's unique
+ * index would); one that merely overlaps is named in a warning, unless
+ * `allowOverlap`. `exceptId` leaves out the booking being moved.
+ */
+async function checkOverlaps(
+  supabase: ServerClient,
+  startsAt: string,
+  endsAt: string,
+  allowOverlap: boolean,
+  exceptId?: string,
+): Promise<{ ok: false; error: string; overlap?: true } | null> {
+  let query = supabase
+    .from("booking_requests")
+    .select("name, starts_at")
+    .neq("status", "cancelled")
+    .lt("starts_at", endsAt)
+    .gt("ends_at", startsAt);
+  if (exceptId) query = query.neq("id", exceptId);
+  const { data, error } = await query.order("starts_at", { ascending: true });
+  if (error) return { ok: false, error: "Sorry, that did not save. Please try again." };
+  const overlaps = (data ?? []) as { name: string; starts_at: string }[];
+  if (overlaps.some((b) => Date.parse(b.starts_at) === Date.parse(startsAt))) return { ok: false, error: CLASH };
+  if (overlaps.length > 0 && !allowOverlap) {
+    const named = overlaps.map((b) => `${firstName(b.name)}'s ${formatTime(b.starts_at)} session`);
+    return { ok: false, overlap: true, error: `This overlaps ${named.join(" and ")}.` };
+  }
+  return null;
+}
+
+/**
+ * Add an admin booking: one the trainer arranged with a client by phone or
+ * text. Any future date and quarter-hour time, not just the public schedule;
+ * saved as confirmed; no per-email cap (see docs/adr/0001-admin-bookings.md).
+ *
+ * Reachable by direct POST, so it re-checks every field and the session; the
+ * insert runs as the signed-in user, so row level security only lets an admin
+ * add it. A live booking at the exact same start blocks it (as the database's
+ * unique index would); one that merely overlaps is named in a warning, unless
+ * `allowOverlap` is set.
+ *
+ * If an email is given the client gets the Confirmed email, and, like
+ * confirmBooking, this waits for it and the booking stays saved either way.
+ * The trainer gets no new-booking email: they added it themself.
+ */
+export async function addBooking(input: AddBookingInput): Promise<AddBookingResult> {
+  const parsed = parseBookingFields(input);
+  if (!parsed.ok) return parsed;
+  const { name, email, phone, note, startsAt, endsAt } = parsed;
+  const fail = (error: string) => ({ ok: false, error }) as const;
 
   const supabase = await createClient();
   const {
@@ -327,20 +392,8 @@ export async function addBooking(input: AddBookingInput): Promise<AddBookingResu
 
   const failed = fail("Sorry, that did not save. Please try again.");
 
-  const { data: others, error: readError } = await supabase
-    .from("booking_requests")
-    .select("name, starts_at")
-    .neq("status", "cancelled")
-    .lt("starts_at", endsAt)
-    .gt("ends_at", startsAt)
-    .order("starts_at", { ascending: true });
-  if (readError) return failed;
-  const overlaps = (others ?? []) as { name: string; starts_at: string }[];
-  if (overlaps.some((b) => Date.parse(b.starts_at) === start.getTime())) return fail(CLASH);
-  if (overlaps.length > 0 && input.allowOverlap !== true) {
-    const named = overlaps.map((b) => `${firstName(b.name)}'s ${formatTime(b.starts_at)} session`);
-    return { ok: false, overlap: true, error: `This overlaps ${named.join(" and ")}.` };
-  }
+  const blocked = await checkOverlaps(supabase, startsAt, endsAt, input.allowOverlap === true);
+  if (blocked) return blocked;
 
   const { error } = await supabase.from("booking_requests").insert({
     name,
@@ -363,4 +416,117 @@ export async function addBooking(input: AddBookingInput): Promise<AddBookingResu
     return { ok: true, emailed: false };
   }
   return { ok: true, emailed: true };
+}
+
+export type EditBookingInput = AddBookingInput & {
+  /** The booking being changed. */
+  id: string;
+  /** Don't send the moved or Confirmed email a new time would otherwise send. */
+  skipEmail?: boolean;
+};
+
+/**
+ * `moved` when the start or end changed; `confirmed` when that also confirmed
+ * a new request. `emailed` is null when no email was sent (details only, the
+ * trainer chose not to, or no email on file), false when it did not send.
+ * `overlap` as for AddBookingResult.
+ */
+export type EditBookingResult =
+  | { ok: true; moved: boolean; confirmed: boolean; emailed: boolean | null }
+  | { ok: false; error: string; overlap?: true };
+
+/**
+ * Edit or move a live, future booking (website or admin) from /admin. The
+ * fields and the new time follow addBooking's rules; `source` never changes,
+ * and a website booking keeps an email (the database requires one).
+ *
+ * Changing only the details emails nobody. Moving a confirmed booking emails
+ * the client the old and new times; moving a new request also confirms it, and
+ * the client gets the Confirmed email for the new time. `skipEmail` sends
+ * neither. Like confirmBooking, this waits for the email, and the edit stays
+ * saved whether or not it sends.
+ *
+ * Reachable by direct POST, so it re-checks every field and the session; the
+ * update runs as the signed-in user, so row level security only lets an admin
+ * change the row. It only matches the booking as it was read, so a change made
+ * in between (another tab) saves nothing and sends nothing.
+ */
+export async function editBooking(input: EditBookingInput): Promise<EditBookingResult> {
+  if (!input || typeof input !== "object" || typeof input.id !== "string" || !UUID.test(input.id)) {
+    return { ok: false, error: "That booking could not be saved." };
+  }
+  const parsed = parseBookingFields(input);
+  if (!parsed.ok) return parsed;
+  const { name, email, phone, note, startsAt, endsAt } = parsed;
+  const fail = (error: string) => ({ ok: false, error }) as const;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/admin/sign-in");
+
+  const failed = fail("Sorry, that did not save. Please try again.");
+  const notChanged = fail("That booking could not be changed. Please refresh the page.");
+
+  const { data: rows, error: readError } = await supabase
+    .from("booking_requests")
+    .select("status, source, email, starts_at, ends_at")
+    .eq("id", input.id)
+    .in("status", ["new", "confirmed"]);
+  if (readError) return failed;
+  const current = rows?.[0] as
+    | { status: "new" | "confirmed"; source: "website" | "admin"; email: string | null; starts_at: string; ends_at: string }
+    | undefined;
+  if (!current) return notChanged;
+  const started = fail("This session has already started, so it can't be changed.");
+  if (Date.parse(current.starts_at) <= Date.now()) return started;
+  if (current.source === "website" && !email) {
+    return fail("A booking made on the website needs an email address. Please add one.");
+  }
+
+  const moved =
+    Date.parse(current.starts_at) !== Date.parse(startsAt) || Date.parse(current.ends_at) !== Date.parse(endsAt);
+  if (moved) {
+    const blocked = await checkOverlaps(supabase, startsAt, endsAt, input.allowOverlap === true, input.id);
+    if (blocked) return blocked;
+  }
+  const confirmed = moved && current.status === "new";
+
+  const { data, error } = await supabase
+    .from("booking_requests")
+    .update({
+      name,
+      email: email || null,
+      phone: phone || null,
+      note: note || null,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      ...(confirmed ? { status: "confirmed" } : {}),
+    })
+    .eq("id", input.id)
+    .eq("status", current.status)
+    .eq("starts_at", current.starts_at)
+    .select("id");
+  if (error) {
+    // It started (or was cancelled in another tab) between the read and the save.
+    if (error.code === NOT_EDITABLE) return started;
+    return error.code === UNIQUE_VIOLATION ? fail(CLASH) : failed;
+  }
+  if (!data || data.length === 0) return notChanged;
+  revalidatePath("/admin");
+
+  const done = { ok: true, moved, confirmed } as const;
+  if (!moved || !email || input.skipEmail === true) return { ...done, emailed: null };
+  try {
+    if (confirmed) {
+      await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "" });
+    } else {
+      await sendBookingMoved({ name, email, oldStartsAt: current.starts_at, startsAt, endsAt });
+    }
+  } catch (err) {
+    console.error(`Booking ${confirmed ? "confirmation" : "moved"} email could not be sent:`, err);
+    return { ...done, emailed: false };
+  }
+  return { ...done, emailed: true };
 }

@@ -106,6 +106,23 @@ export function gymTimeToUtc(date: string, time: string): Date | null {
   return new Date(asUtc.getTime() - offset * 60000);
 }
 
+/**
+ * The gym-zone date ("YYYY-MM-DD") and time ("HH:MM", 24h) of an instant: the
+ * inverse of gymTimeToUtc, as the admin booking form takes them.
+ */
+export function utcToGymTime(iso: string): { date: string; time: string } {
+  const instant = new Date(iso);
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: DISPLAY_TIME_ZONE }).format(instant);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: DISPLAY_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return { date, time: `${get("hour")}:${get("minute")}` };
+}
+
 /** The gym-zone weekday (0–6) and Y/M/D for a UTC instant. */
 function zonedParts(instant: Date): { weekday: number; year: number; month: number; day: number; date: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {

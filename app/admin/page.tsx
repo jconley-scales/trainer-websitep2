@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import { AddBookingForm } from "./add-booking-form";
 import { BookingStatusButtons } from "./booking-status-buttons";
+import { EditableBooking, EditingProvider } from "./edit-booking";
 
 export const metadata: Metadata = { title: "Bookings" };
 
@@ -23,6 +24,8 @@ type Booking = {
   created_at: string;
   /** "admin" when the trainer added it at /admin, "website" when requested on /book. */
   source: "website" | "admin";
+  /** When its details or time were last edited at /admin; null if never. */
+  updated_at: string | null;
 };
 
 const STATUS_LABEL: Record<Booking["status"], string> = {
@@ -82,7 +85,7 @@ async function BookingList() {
     );
   }
 
-  const { upcoming, past } = bookings;
+  const { upcoming, past, now } = bookings;
   const newCount = upcoming.filter((b) => b.status === "new").length;
 
   return (
@@ -101,14 +104,16 @@ async function BookingList() {
         {upcoming.length === 0 ? (
           <p className="empty-state">No upcoming bookings yet.</p>
         ) : (
-          <BookingCards bookings={upcoming} />
+          <EditingProvider>
+            <BookingCards bookings={upcoming} now={now} />
+          </EditingProvider>
         )}
       </section>
 
       {past.length > 0 ? (
         <details className="admin-past">
           <summary>Past bookings ({past.length})</summary>
-          <BookingCards bookings={past} readOnly />
+          <BookingCards bookings={past} now={now} readOnly />
         </details>
       ) : null}
     </>
@@ -122,10 +127,10 @@ async function BookingList() {
  */
 async function loadBookings(
   db: Awaited<ReturnType<typeof createClient>>,
-): Promise<{ upcoming: Booking[]; past: Booking[] } | null> {
+): Promise<{ upcoming: Booking[]; past: Booking[]; now: number } | null> {
   const { data, error } = await db
     .from("booking_requests")
-    .select("id, name, email, phone, note, starts_at, ends_at, status, created_at, source")
+    .select("id, name, email, phone, note, starts_at, ends_at, status, created_at, source, updated_at")
     .order("starts_at", { ascending: true })
     .overrideTypes<Booking[], { merge: false }>();
   if (error) return null;
@@ -133,59 +138,84 @@ async function loadBookings(
   return {
     upcoming: data.filter((b) => Date.parse(b.ends_at) >= now),
     past: data.filter((b) => Date.parse(b.ends_at) < now).reverse(),
+    now,
   };
 }
 
-function BookingCards({ bookings, readOnly = false }: { bookings: Booking[]; readOnly?: boolean }) {
+/**
+ * The booking cards. Unless `readOnly`, each has Confirm/Cancel buttons, and a
+ * live booking that has not started yet (as of `now`) can be edited or moved.
+ */
+function BookingCards({
+  bookings,
+  now,
+  readOnly = false,
+}: {
+  bookings: Booking[];
+  now: number;
+  readOnly?: boolean;
+}) {
   return (
     <ul className="session-list">
       {bookings.map((b) => {
         const date = formatDate(b.starts_at);
+        const details = (
+          <dl className="session-details">
+            <div>
+              <dt>Time</dt>
+              <dd>{formatTimeRange(b.starts_at, b.ends_at)}</dd>
+            </div>
+            <div>
+              <dt>Name</dt>
+              <dd>{b.name}</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>{b.email ? <a href={`mailto:${b.email}`}>{b.email}</a> : "No email given"}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{b.phone ? <a href={`tel:${b.phone.replace(/[^\d+]/g, "")}`}>{b.phone}</a> : "Not given"}</dd>
+            </div>
+            {b.note ? (
+              <div>
+                <dt>Note</dt>
+                <dd className="admin-note">{b.note}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>{b.source === "admin" ? "Added" : "Requested"}</dt>
+              <dd>{formatDate(b.created_at)}</dd>
+            </div>
+          </dl>
+        );
         return (
           <li key={b.id} className={`session-card admin-booking admin-booking--${b.status}`}>
             <div className="admin-booking-head">
               <h3 className="session-date">{date}</h3>
               <span className="admin-booking-tags">
                 {b.source === "admin" ? <span className="source-tag">Added by you</span> : null}
+                {b.updated_at ? <span className="source-tag">Edited</span> : null}
                 <span className={`status-badge status-badge--${b.status}`}>{STATUS_LABEL[b.status]}</span>
               </span>
             </div>
-            <dl className="session-details">
-              <div>
-                <dt>Time</dt>
-                <dd>{formatTimeRange(b.starts_at, b.ends_at)}</dd>
-              </div>
-              <div>
-                <dt>Name</dt>
-                <dd>{b.name}</dd>
-              </div>
-              <div>
-                <dt>Email</dt>
-                <dd>{b.email ? <a href={`mailto:${b.email}`}>{b.email}</a> : "No email given"}</dd>
-              </div>
-              <div>
-                <dt>Phone</dt>
-                <dd>{b.phone ? <a href={`tel:${b.phone.replace(/[^\d+]/g, "")}`}>{b.phone}</a> : "Not given"}</dd>
-              </div>
-              {b.note ? (
-                <div>
-                  <dt>Note</dt>
-                  <dd className="admin-note">{b.note}</dd>
-                </div>
-              ) : null}
-              <div>
-                <dt>{b.source === "admin" ? "Added" : "Requested"}</dt>
-                <dd>{formatDate(b.created_at)}</dd>
-              </div>
-            </dl>
-            {readOnly ? null : (
-              <BookingStatusButtons
-                id={b.id}
-                status={b.status}
-                who={`${b.name} on ${date}`}
-                clientFirstName={firstName(b.name)}
-                when={formatDayMonthTime(b.starts_at)}
-                hasEmail={b.email !== null}
+            {readOnly ? (
+              details
+            ) : (
+              <EditableBooking
+                booking={b}
+                canEdit={b.status !== "cancelled" && Date.parse(b.starts_at) > now}
+                details={details}
+                actions={
+                  <BookingStatusButtons
+                    id={b.id}
+                    status={b.status}
+                    who={`${b.name} on ${date}`}
+                    clientFirstName={firstName(b.name)}
+                    when={formatDayMonthTime(b.starts_at)}
+                    hasEmail={b.email !== null}
+                  />
+                }
               />
             )}
           </li>

@@ -9,6 +9,7 @@ import {
   notifyTrainerOfBooking,
   sendBookingCancellation,
   sendBookingConfirmation,
+  sendBookingMoved,
   sendContactMessage,
 } from "@/lib/notify";
 
@@ -88,6 +89,56 @@ describe("sendBookingConfirmation", () => {
   it("throws when email is not configured, so the caller can warn the trainer", async () => {
     vi.stubEnv("SMTP_HOST", "");
     await expect(sendBookingConfirmation({ ...BOOKING, note: "" })).rejects.toThrow();
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendBookingMoved", () => {
+  /** Moved from Friday 9:00 AM to Sunday, October 27, 11:00 AM for 45 minutes. */
+  const MOVED = {
+    name: "Jordan Tester",
+    email: "jordan@example.com",
+    oldStartsAt: "2030-10-25T13:00:00Z",
+    startsAt: "2030-10-27T15:00:00Z",
+    endsAt: "2030-10-27T15:45:00Z",
+  };
+
+  it("states the old and the new time plainly, in plain text, with the usual sender and sign-off", async () => {
+    await sendBookingMoved(MOVED);
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe("jordan@example.com");
+    expect(mail.from).toBe("Booking <booking@example.com>");
+    expect(mail.replyTo).toBe("Booking <booking@example.com>");
+    expect(mail.html).toBeUndefined();
+    expect(mail.subject).toBe("Your session has moved: Sunday, October 27 at 11:00 AM");
+    expect(mail.text).toBe(
+      [
+        "Hi Jordan,",
+        "",
+        "Your session has moved.",
+        "",
+        "    Was: Friday, October 25 at 9:00 AM",
+        "    Now: Sunday, October 27 at 11:00 AM",
+        "",
+        "Your new session:",
+        "",
+        "    Sunday, October 27",
+        "    11:00 AM to 11:45 AM (Eastern time)",
+        "",
+        "If the new time doesn't suit you, just reply to this email.",
+        "",
+        "Kind regards,",
+        "Jervaughn Scales",
+        "My Older Fitness",
+      ].join("\n"),
+    );
+  });
+
+  it("throws when email is not configured, so the caller can warn the trainer", async () => {
+    vi.stubEnv("SMTP_HOST", "");
+    await expect(sendBookingMoved(MOVED)).rejects.toThrow();
     expect(sendMail).not.toHaveBeenCalled();
   });
 });

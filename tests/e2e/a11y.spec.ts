@@ -995,4 +995,189 @@ test.describe("/admin confirm and cancel panels", () => {
     await expect(page.getByRole("status").filter({ hasText: "Added Sam's session on" })).toBeFocused();
     await expect(page.locator(".admin-booking").filter({ hasText: name }).locator(".source-tag")).toHaveText("Added by you");
   });
+
+  /** Tabs through the focused form, checking each stop is 48px with a focus ring; returns the labels reached. */
+  async function tabThrough(page: Page, count: number) {
+    const reached: string[] = [];
+    for (let i = 0; i < count + 12 && reached.length < count; i++) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return {
+          label: ((el as HTMLInputElement).labels?.[0]?.textContent ?? el.textContent ?? "").trim(),
+          width: rect.width,
+          height: rect.height,
+          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
+        };
+      });
+      if (reached.at(-1) === stop.label) continue;
+      reached.push(stop.label);
+      expect(stop.height, `${stop.label} height`).toBeGreaterThanOrEqual(48);
+      expect(stop.width, `${stop.label} width`).toBeGreaterThanOrEqual(48);
+      expect(stop.outline, `${stop.label} focus ring`).toBe(true);
+    }
+    return reached;
+  }
+
+  async function seededStart(request: APIRequestContext) {
+    const row = await request.get(`${supabaseUrl}/rest/v1/booking_requests?id=eq.${seeded.bookingId}&select=starts_at`, {
+      headers: adminHeaders,
+    });
+    const [{ starts_at }] = (await row.json()) as { starts_at: string }[];
+    return Date.parse(starts_at);
+  }
+
+  test("edit a booking: details only, no email, Edited tag; axe, keyboard, 48px targets, focus", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    const edit = card.getByRole("button", { name: "Edit the booking for Jordan Tester" });
+    await edit.click();
+
+    // In edit mode the name is only an input value, so find the (only) edit form on the page.
+    const form = page.getByRole("form", { name: "Edit Jordan's booking" });
+    await expect(form).toBeVisible();
+    await expect(form.getByRole("heading", { name: "Edit Jordan's booking" })).toBeFocused();
+    await expect(form.getByLabel("Client's name")).toHaveValue("Jordan Tester");
+    await expect(form.getByLabel("Length")).toHaveValue("60");
+    await expectNoSeriousViolations(page, "/admin (edit form)");
+
+    expect(await tabThrough(page, 9)).toEqual([
+      "Client's name",
+      "Date",
+      "Start time",
+      "Length",
+      "Email",
+      "Phone (optional)",
+      "Note (optional)",
+      "Save changes",
+      "Never mind",
+    ]);
+
+    // "Never mind" puts the card back and focus on Edit.
+    await page.keyboard.press("Enter");
+    await expect(form).toBeHidden();
+    await expect(edit).toBeFocused();
+
+    await edit.click();
+    await form.getByLabel("Phone (optional)").fill("555 010 2030");
+    await form.getByLabel("Note (optional)").fill("Bad left knee.");
+    await expect(form.getByLabel("Don't email the client")).toHaveCount(0);
+    await form.getByRole("button", { name: "Save changes" }).click();
+
+    const status = card.getByRole("status");
+    await expect(status).toHaveText("Saved your changes to Jordan's booking.");
+    await expect(status).toBeFocused();
+    await expect(card).toContainText("555 010 2030");
+    await expect(card).toContainText("Bad left knee.");
+    await expect(card.locator(".status-badge")).toHaveText("New request");
+    const edited = card.locator(".source-tag").filter({ hasText: "Edited" });
+    await expect(edited).toBeVisible();
+    expect(await contrastRatio(edited), "Edited tag").toBeGreaterThanOrEqual(4.5);
+    await expectNoSeriousViolations(page, "/admin (after editing)");
+  });
+
+  test("move a booking: clash blocked, overlap warns, moving a request confirms it; Don't email the client", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const start = await seededStart(request);
+    // Another booking two hours later, an hour long.
+    const otherStart = start + 2 * 3_600_000;
+    await rest(request, "booking_requests", {
+      name: `Sam ${ADDED_MARK}-${randomUUID().slice(0, 8)}`,
+      starts_at: new Date(otherStart).toISOString(),
+      ends_at: new Date(otherStart + 3_600_000).toISOString(),
+      status: "confirmed",
+      source: "admin",
+    });
+    await page.reload();
+
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    await card.getByRole("button", { name: "Edit the booking for Jordan Tester" }).click();
+    // In edit mode the name is only an input value, so find the (only) edit form on the page.
+    const form = page.getByRole("form", { name: "Edit Jordan's booking" });
+
+    // Exactly the other booking's start: blocked.
+    const clash = gymDateTime(new Date(otherStart).toISOString());
+    await form.getByLabel("Date").fill(clash.date);
+    await form.getByLabel("Start time").selectOption(clash.time);
+    await expect(form).toContainText(
+      "Moving this request also confirms it. Saving sends Jordan the confirmation email with the new time.",
+    );
+    await form.getByRole("button", { name: "Save changes" }).click();
+    await expect(form.getByRole("alert")).toHaveText("Another booking already holds that time. Please choose another.");
+    await expect(form.getByRole("button", { name: "Save anyway" })).toHaveCount(0);
+
+    // A quarter hour earlier overlaps it: warned, and can be saved anyway.
+    const overlap = gymDateTime(new Date(otherStart - 15 * 60_000).toISOString());
+    await form.getByLabel("Start time").selectOption(overlap.time);
+    await form.getByRole("button", { name: "Save changes" }).click();
+    const warning = form.getByRole("alert");
+    await expect(warning).toContainText(/^This overlaps Sam's \d{1,2}:\d{2} [AP]M session\./);
+    await expectNoSeriousViolations(page, "/admin (edit form, moved, overlap warning)");
+
+    // "Don't email the client" is a 48px target with a focus ring.
+    const dontEmail = form.getByLabel("Don't email the client");
+    await expect(dontEmail).not.toBeChecked();
+    await dontEmail.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(dontEmail).toBeFocused();
+    const row = await form.locator(".check-field").boundingBox();
+    expect(row?.height ?? 0, "Don't email row height").toBeGreaterThanOrEqual(48);
+    const ring = await dontEmail.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return s.outlineStyle !== "none" && parseFloat(s.outlineWidth) >= 2;
+    });
+    expect(ring, "Don't email focus ring").toBe(true);
+
+    await form.getByRole("button", { name: "Save anyway" }).click();
+    const result = card.locator(".notice-message, .warning-message");
+    await expect(result).toHaveText(
+      /^Moved and confirmed Jordan's session for .+ at \d{1,2}:\d{2} [AP]M(\. Jordan has been emailed a confirmation\.|, but the email to Jordan didn't send\. Please call or email them yourself\.)$/,
+    );
+    await expect(result).toBeFocused();
+    await expect(card.locator(".status-badge")).toHaveText("Confirmed");
+    await expect(card.locator(".source-tag").filter({ hasText: "Edited" })).toBeVisible();
+    await expectNoSeriousViolations(page, "/admin (after moving)");
+
+    // Moving a confirmed booking, with Don't email the client ticked.
+    await card.getByRole("button", { name: "Edit the booking for Jordan Tester" }).click();
+    const later = gymDateTime(new Date(otherStart + 2 * 3_600_000).toISOString());
+    await form.getByLabel("Date").fill(later.date);
+    await form.getByLabel("Start time").selectOption(later.time);
+    await expect(form).toContainText("Saving emails Jordan the old and new times.");
+    await form.getByLabel("Don't email the client").check();
+    await form.getByRole("button", { name: "Save changes" }).click();
+    await expect(card.getByRole("status")).toHaveText(
+      /^Moved Jordan's session to .+ at \d{1,2}:\d{2} [AP]M\. Jordan has not been emailed\.$/,
+    );
+  });
+
+  test("cancelled and past bookings offer no Edit", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    await request.patch(`${supabaseUrl}/rest/v1/booking_requests?id=eq.${seeded.bookingId}`, {
+      headers: adminHeaders,
+      data: { status: "cancelled" },
+    });
+    const pastStart = Date.now() - 2 * 86_400_000 - Math.floor(Math.random() * 1_000_000) * 1000;
+    const pastName = `Pat ${ADDED_MARK}-${randomUUID().slice(0, 8)}`;
+    await rest(request, "booking_requests", {
+      name: pastName,
+      starts_at: new Date(pastStart).toISOString(),
+      ends_at: new Date(pastStart + 3_600_000).toISOString(),
+      status: "confirmed",
+      source: "admin",
+    });
+    await page.reload();
+
+    const cancelled = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    await expect(cancelled.locator(".status-badge")).toHaveText("Cancelled");
+    await expect(cancelled.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
+
+    await page.getByText(/^Past bookings/).click();
+    const past = page.locator(".admin-booking").filter({ hasText: pastName });
+    await expect(past).toBeVisible();
+    await expect(past.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
+  });
 });

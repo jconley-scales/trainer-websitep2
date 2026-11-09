@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableDays, availabilityWindow, gymTimeToUtc, withoutTaken } from "@/lib/booking-availability";
+import { availableDays, availabilityWindow, gymTimeToUtc, utcToGymTime, withoutTaken } from "@/lib/booking-availability";
 
 // Thursday 2026-10-22 noon UTC = 8:00 in New York (EDT), so that day's 8:00
 // session has already started and only 9:30 is still offered.
@@ -148,5 +148,21 @@ describe("gymTimeToUtc", () => {
     expect(gymTimeToUtc("2030-07-11", "10:60")).toBeNull();
     expect(gymTimeToUtc("next tuesday", "10:00")).toBeNull();
     expect(gymTimeToUtc("2030-07-11", "10am")).toBeNull();
+  });
+});
+
+describe("utcToGymTime", () => {
+  it("gives the gym-zone date and time of an instant, as the booking form takes them", () => {
+    expect(utcToGymTime("2030-07-11T14:15:00.000Z")).toEqual({ date: "2030-07-11", time: "10:15" });
+    expect(utcToGymTime("2030-01-10T13:00:00Z")).toEqual({ date: "2030-01-10", time: "08:00" });
+  });
+
+  it("gives the gym's date, not UTC's, late in the evening", () => {
+    // 11:30 PM Eastern on the 10th is already the 11th in UTC.
+    expect(utcToGymTime("2030-01-11T04:30:00Z")).toEqual({ date: "2030-01-10", time: "23:30" });
+  });
+
+  it("writes midnight as 00:00", () => {
+    expect(utcToGymTime("2030-01-10T05:00:00Z")).toEqual({ date: "2030-01-10", time: "00:00" });
   });
 });

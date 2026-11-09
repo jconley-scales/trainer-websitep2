@@ -203,3 +203,149 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     expect(error?.code).toBe("23505");
   });
 });
+
+describe.skipIf(!running)("editing bookings (local Supabase)", () => {
+  let trainer: Awaited<ReturnType<typeof signedInUser>>;
+  let member: Awaited<ReturnType<typeof signedInUser>>;
+
+  beforeAll(async () => {
+    trainer = await signedInUser(true);
+    member = await signedInUser(false);
+  });
+
+  afterEach(async () => {
+    await service.from("booking_requests").delete().like("name", `%${MARK}%`);
+  });
+
+  afterAll(async () => {
+    for (const u of [trainer, member]) {
+      if (!u) continue;
+      await service.from("admins").delete().eq("email", u.email);
+      await service.auth.admin.deleteUser(u.id);
+    }
+  });
+
+  /** A website request (as a visitor makes it), returning its id. Extra columns are set by the service role. */
+  async function websiteBooking(extra: Record<string, unknown> = {}, time = freeTime()) {
+    const { data, error } = await service
+      .from("booking_requests")
+      .insert({ name: `Jordan ${MARK}`, email: clientEmail("jordan"), ...time, ...extra })
+      .select("id")
+      .single();
+    if (error || !data) throw error ?? new Error("no row");
+    return data.id as string;
+  }
+
+  async function row(id: string) {
+    const { data } = await service
+      .from("booking_requests")
+      .select("name, email, phone, note, starts_at, ends_at, status, source, updated_at")
+      .eq("id", id)
+      .single();
+    return data!;
+  }
+
+  it("lets the trainer change a booking's details and time, and records when it was edited", async () => {
+    const id = await websiteBooking();
+    expect((await row(id)).updated_at).toBeNull();
+    const moved = freeTime(45);
+
+    const { data, error } = await trainer.db
+      .from("booking_requests")
+      .update({
+        name: `Jordan Tester ${MARK}`,
+        email: clientEmail("fixed"),
+        phone: "555 010 2030",
+        note: "Bad left knee.",
+        ...moved,
+      })
+      .eq("id", id)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    const after = await row(id);
+    expect(after).toMatchObject({ phone: "555 010 2030", note: "Bad left knee.", source: "website" });
+    expect(Date.parse(after.starts_at)).toBe(Date.parse(moved.starts_at));
+    expect(after.updated_at).not.toBeNull();
+  });
+
+  it("does not mark a booking edited when only its status changes", async () => {
+    const id = await websiteBooking();
+    const { error } = await trainer.db.from("booking_requests").update({ status: "confirmed" }).eq("id", id);
+    expect(error).toBeNull();
+    expect(await row(id)).toMatchObject({ status: "confirmed", updated_at: null });
+  });
+
+  it("does not let the trainer change where a booking came from, or when it was edited", async () => {
+    const id = await websiteBooking();
+    const source = await trainer.db.from("booking_requests").update({ source: "admin" }).eq("id", id);
+    const stamp = await trainer.db
+      .from("booking_requests")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    expect(source.error?.code).toBe("42501");
+    expect(stamp.error?.code).toBe("42501");
+    expect(await row(id)).toMatchObject({ source: "website", updated_at: null });
+  });
+
+  it("does not let a signed-in non-admin or a visitor edit any booking", async () => {
+    const id = await websiteBooking();
+    const before = await row(id);
+
+    const fromMember = await member.db.from("booking_requests").update({ name: `Hacked ${MARK}` }).eq("id", id).select("id");
+    const fromVisitor = await anon.from("booking_requests").update({ name: `Hacked ${MARK}` }).eq("id", id).select("id");
+
+    expect(fromMember.data ?? []).toEqual([]);
+    expect(fromVisitor.error?.code ?? "none").not.toBe("none");
+    expect(await row(id)).toEqual(before);
+  });
+
+  it("still needs an email on a website booking", async () => {
+    const id = await websiteBooking();
+    const { error } = await trainer.db.from("booking_requests").update({ email: null }).eq("id", id);
+    expect(error?.code).toBe("23514");
+  });
+
+  it("does not let the per-email cap block correcting an email onto a client who already has three requests", async () => {
+    const who = clientEmail("regular");
+    for (let i = 0; i < 3; i++) {
+      const { error } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime() });
+      expect(error).toBeNull();
+    }
+    const id = await websiteBooking();
+
+    const { error } = await trainer.db.from("booking_requests").update({ email: who }).eq("id", id);
+
+    expect(error).toBeNull();
+    expect((await row(id)).email).toBe(who);
+  });
+
+  it("blocks moving a booking onto the exact start of another live booking", async () => {
+    const taken = freeTime();
+    await websiteBooking({}, taken);
+    const id = await websiteBooking();
+
+    const { error } = await trainer.db.from("booking_requests").update(taken).eq("id", id);
+    expect(error?.code).toBe("23505");
+  });
+
+  it("keeps cancelled and past bookings read-only, though a cancelled one can still be reopened", async () => {
+    const cancelled = await websiteBooking({ status: "cancelled" });
+    const edit = await trainer.db.from("booking_requests").update({ note: "changed" }).eq("id", cancelled);
+    expect(edit.error?.code).toBe("PF002");
+
+    const reopen = await trainer.db.from("booking_requests").update({ status: "new" }).eq("id", cancelled);
+    expect(reopen.error).toBeNull();
+
+    const start = Date.now() - 3 * 86_400_000 - Math.floor(Math.random() * 1_000_000) * 1000;
+    const past = await websiteBooking({}, {
+      starts_at: new Date(start).toISOString(),
+      ends_at: new Date(start + 60 * MINUTE).toISOString(),
+    });
+    const pastEdit = await trainer.db.from("booking_requests").update({ note: "changed" }).eq("id", past);
+    expect(pastEdit.error?.code).toBe("PF002");
+    expect((await row(past)).note).toBeNull();
+  });
+});

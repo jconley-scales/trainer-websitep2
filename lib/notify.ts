@@ -199,6 +199,53 @@ export async function sendBookingConfirmation(booking: BookingConfirmation): Pro
   });
 }
 
+export type BookingMove = {
+  name: string;
+  email: string;
+  /** When the session started before it moved. */
+  oldStartsAt: string;
+  /** Where it is now. */
+  startsAt: string;
+  endsAt: string;
+};
+
+/**
+ * Email a client that the trainer moved their confirmed session, naming the
+ * old and the new time plainly before the new session's full details. Same
+ * sender, layout and failure rules as sendBookingConfirmation: throws when
+ * email is not configured or sending fails.
+ */
+export async function sendBookingMoved(move: BookingMove): Promise<void> {
+  const m = mailer();
+  if (!m) {
+    throw new Error("Session-moved email is not configured: set SMTP_HOST and BOOKING_FROM_EMAIL (or BOOKING_NOTIFY_EMAIL).");
+  }
+  const text = [
+    `Hi ${firstName(move.name)},`,
+    "",
+    "Your session has moved.",
+    "",
+    `    Was: ${formatDayMonthTime(move.oldStartsAt)}`,
+    `    Now: ${formatDayMonthTime(move.startsAt)}`,
+    "",
+    "Your new session:",
+    "",
+    ...sessionLines(move.startsAt, move.endsAt),
+    "",
+    "If the new time doesn't suit you, just reply to this email.",
+    "",
+    ...signOff,
+  ].join("\n");
+
+  await m.transport.sendMail({
+    from: m.from,
+    to: oneLine(move.email),
+    replyTo: m.from,
+    subject: oneLine(`Your session has moved: ${formatDayMonthTime(move.startsAt)}`),
+    text,
+  });
+}
+
 export type BookingCancellation = {
   name: string;
   email: string;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { sendBookingConfirmation, sendBookingCancellation, notifyTrainerOfBooking, db } = vi.hoisted(() => {
+const { sendBookingConfirmation, sendBookingCancellation, sendBookingMoved, notifyTrainerOfBooking, db } = vi.hoisted(() => {
   /**
    * A stand-in for the Supabase query builder: every call chains, and awaiting
    * the chain gives the next of `db.queue`, else `db.result`. `db.calls`
@@ -15,12 +15,13 @@ const { sendBookingConfirmation, sendBookingCancellation, notifyTrainerOfBooking
   return {
     sendBookingConfirmation: vi.fn(),
     sendBookingCancellation: vi.fn(),
+    sendBookingMoved: vi.fn(),
     notifyTrainerOfBooking: vi.fn(),
     db,
   };
 });
 
-vi.mock("@/lib/notify", () => ({ sendBookingConfirmation, sendBookingCancellation, notifyTrainerOfBooking }));
+vi.mock("@/lib/notify", () => ({ sendBookingConfirmation, sendBookingCancellation, sendBookingMoved, notifyTrainerOfBooking }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(() => {
@@ -42,7 +43,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-import { addBooking, cancelBooking, confirmBooking, setBookingStatus } from "@/app/admin/actions";
+import { addBooking, cancelBooking, confirmBooking, editBooking, setBookingStatus } from "@/app/admin/actions";
 
 const ID = "2b9f6c1e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
 const ROW = {
@@ -58,6 +59,8 @@ beforeEach(() => {
   sendBookingConfirmation.mockResolvedValue(undefined);
   sendBookingCancellation.mockReset();
   sendBookingCancellation.mockResolvedValue(undefined);
+  sendBookingMoved.mockReset();
+  sendBookingMoved.mockResolvedValue(undefined);
   notifyTrainerOfBooking.mockReset();
   db.queue = [];
   db.result = { data: [ROW], error: null };
@@ -452,5 +455,295 @@ describe("addBooking", () => {
     db.user = null;
     await expect(addBooking(PHONE_BOOKING)).rejects.toThrow("NEXT_REDIRECT");
     expect(inserts()).toEqual([]);
+  });
+});
+
+describe("editBooking", () => {
+  type Reply = { data: unknown[] | null; error: { code?: string } | null };
+
+  /** Jordan's booking as it stands: Friday, October 25, 2030, 9:00 to 10:00 AM (13:00Z). */
+  const CURRENT = {
+    status: "confirmed",
+    source: "website",
+    email: "jordan@example.com",
+    starts_at: "2030-10-25T13:00:00+00:00",
+    ends_at: "2030-10-25T14:00:00+00:00",
+  };
+  /** The form, filled in with the booking unchanged. */
+  const UNCHANGED = {
+    id: ID,
+    name: "Jordan Tester",
+    email: "jordan@example.com",
+    phone: "",
+    note: "",
+    date: "2030-10-25",
+    time: "09:00",
+    minutes: 60,
+  };
+  /** Moved to Sunday, October 27 at 11:00 AM (15:00Z), still an hour. */
+  const MOVED = { ...UNCHANGED, date: "2030-10-27", time: "11:00" };
+  const NEW_STARTS = "2030-10-27T15:00:00.000Z";
+  const NEW_ENDS = "2030-10-27T16:00:00.000Z";
+
+  const saved: Reply = { data: [{ id: ID }], error: null };
+
+  /** A details-only edit reads the booking, then updates it. */
+  function detailsEdit(current: object = CURRENT, update: Reply = saved) {
+    db.queue = [{ data: [current], error: null }, update];
+  }
+  /** A move reads the booking, then the live bookings it would overlap, then updates it. */
+  function move(
+    current: object = CURRENT,
+    overlaps: { name: string; starts_at: string }[] = [],
+    update: Reply = saved,
+  ) {
+    db.queue = [{ data: [current], error: null }, { data: overlaps, error: null }, update];
+  }
+
+  const updates = () => db.calls.filter(([m]) => m === "update").map(([, args]) => args[0]);
+
+  it("saves new details without emailing anyone, and keeps the time and status", async () => {
+    detailsEdit();
+    const result = await editBooking({
+      ...UNCHANGED,
+      name: " Jordan T. Tester ",
+      email: " Jordan@Example.org ",
+      phone: "555 010 2030",
+      note: "Bad left knee.",
+    });
+
+    expect(result).toEqual({ ok: true, moved: false, confirmed: false, emailed: null });
+    expect(updates()).toEqual([
+      {
+        name: "Jordan T. Tester",
+        email: "jordan@example.org",
+        phone: "555 010 2030",
+        note: "Bad left knee.",
+        starts_at: "2030-10-25T13:00:00.000Z",
+        ends_at: "2030-10-25T14:00:00.000Z",
+      },
+    ]);
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("emails the client the old and new times when a confirmed booking moves", async () => {
+    move();
+    const result = await editBooking(MOVED);
+
+    expect(result).toEqual({ ok: true, moved: true, confirmed: false, emailed: true });
+    expect(updates()).toEqual([expect.objectContaining({ starts_at: NEW_STARTS, ends_at: NEW_ENDS })]);
+    expect(updates()[0]).not.toHaveProperty("status");
+    expect(sendBookingMoved).toHaveBeenCalledWith({
+      name: "Jordan Tester",
+      email: "jordan@example.com",
+      oldStartsAt: CURRENT.starts_at,
+      startsAt: NEW_STARTS,
+      endsAt: NEW_ENDS,
+    });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("counts a new length as a move, since the session's end time changes", async () => {
+    move();
+    expect(await editBooking({ ...UNCHANGED, minutes: 90 })).toMatchObject({ moved: true, emailed: true });
+    expect(sendBookingMoved).toHaveBeenCalledWith(expect.objectContaining({ endsAt: "2030-10-25T14:30:00.000Z" }));
+  });
+
+  it("confirms a new request when it moves, and sends the Confirmed email for the new time instead", async () => {
+    move({ ...CURRENT, status: "new" });
+    const result = await editBooking(MOVED);
+
+    expect(result).toEqual({ ok: true, moved: true, confirmed: true, emailed: true });
+    expect(updates()[0]).toMatchObject({ status: "confirmed", starts_at: NEW_STARTS });
+    expect(sendBookingConfirmation).toHaveBeenCalledWith({
+      name: "Jordan Tester",
+      email: "jordan@example.com",
+      startsAt: NEW_STARTS,
+      endsAt: NEW_ENDS,
+      note: "",
+    });
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("leaves a new request unconfirmed when only its details change", async () => {
+    detailsEdit({ ...CURRENT, status: "new" });
+    expect(await editBooking({ ...UNCHANGED, note: "Prefers mornings." })).toMatchObject({ confirmed: false });
+    expect(updates()[0]).not.toHaveProperty("status");
+  });
+
+  it("sends no email when the trainer ticks Don't email the client, but still saves the move", async () => {
+    move({ ...CURRENT, status: "new" });
+    expect(await editBooking({ ...MOVED, skipEmail: true })).toEqual({
+      ok: true,
+      moved: true,
+      confirmed: true,
+      emailed: null,
+    });
+    expect(updates()).toHaveLength(1);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("moves an admin booking with no email, emailing nobody", async () => {
+    move({ ...CURRENT, source: "admin", email: null });
+    expect(await editBooking({ ...MOVED, email: "" })).toEqual({ ok: true, moved: true, confirmed: false, emailed: null });
+    expect(updates()[0]).toMatchObject({ email: null, phone: null, note: null });
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("emails the address as edited, when the email is corrected in the same save", async () => {
+    move();
+    await editBooking({ ...MOVED, email: "jordan.tester@example.com" });
+    expect(sendBookingMoved).toHaveBeenCalledWith(expect.objectContaining({ email: "jordan.tester@example.com" }));
+  });
+
+  it("keeps the move saved and reports it when the email fails", async () => {
+    move();
+    sendBookingMoved.mockRejectedValue(new Error("SMTP down"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await editBooking(MOVED)).toEqual({ ok: true, moved: true, confirmed: false, emailed: false });
+    expect(updates()).toHaveLength(1);
+    expect(logged).toHaveBeenCalled();
+  });
+
+  it("does not check for overlaps when the time is unchanged", async () => {
+    detailsEdit();
+    await editBooking({ ...UNCHANGED, phone: "555 0100" });
+    expect(db.calls.map(([m]) => m)).not.toContain("lt");
+  });
+
+  it("looks for overlaps among other live bookings only, not the one being moved", async () => {
+    move();
+    await editBooking(MOVED);
+    expect(db.calls).toContainEqual(["neq", ["status", "cancelled"]]);
+    expect(db.calls).toContainEqual(["neq", ["id", ID]]);
+    expect(db.calls).toContainEqual(["lt", ["starts_at", NEW_ENDS]]);
+    expect(db.calls).toContainEqual(["gt", ["ends_at", NEW_STARTS]]);
+  });
+
+  it("blocks a move onto exactly the start of another live booking, even when overlaps are allowed", async () => {
+    move(CURRENT, [{ name: "Sam Lee", starts_at: "2030-10-27T15:00:00+00:00" }]);
+    expect(await editBooking({ ...MOVED, allowOverlap: true })).toEqual({
+      ok: false,
+      error: "Another booking already holds that time. Please choose another.",
+    });
+    expect(updates()).toEqual([]);
+  });
+
+  it("blocks the same way when another booking takes the time in the meantime", async () => {
+    move(CURRENT, [], { data: null, error: { code: "23505" } });
+    expect(await editBooking(MOVED)).toEqual({
+      ok: false,
+      error: "Another booking already holds that time. Please choose another.",
+    });
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("warns about an overlap, naming the other booking, and saves nothing until Save anyway", async () => {
+    move(CURRENT, [{ name: "Sam Lee", starts_at: "2030-10-27T14:30:00Z" }]);
+    expect(await editBooking(MOVED)).toEqual({ ok: false, overlap: true, error: "This overlaps Sam's 10:30 AM session." });
+    expect(updates()).toEqual([]);
+
+    db.calls = [];
+    move(CURRENT, [{ name: "Sam Lee", starts_at: "2030-10-27T14:30:00Z" }]);
+    expect(await editBooking({ ...MOVED, allowOverlap: true })).toMatchObject({ ok: true, moved: true });
+    expect(updates()).toHaveLength(1);
+  });
+
+  it("only edits a live booking, as it was read, so a change in another tab saves and sends nothing", async () => {
+    move();
+    await editBooking(MOVED);
+    expect(db.calls).toContainEqual(["in", ["status", ["new", "confirmed"]]]);
+    expect(db.calls).toContainEqual(["eq", ["status", "confirmed"]]);
+    expect(db.calls).toContainEqual(["eq", ["starts_at", CURRENT.starts_at]]);
+
+    db.calls = [];
+    sendBookingMoved.mockClear();
+    move(CURRENT, [], { data: [], error: null });
+    expect(await editBooking(MOVED)).toEqual({
+      ok: false,
+      error: "That booking could not be changed. Please refresh the page.",
+    });
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("refuses a cancelled booking (or anything a non-admin cannot see)", async () => {
+    db.queue = [{ data: [], error: null }];
+    expect(await editBooking(MOVED)).toEqual({
+      ok: false,
+      error: "That booking could not be changed. Please refresh the page.",
+    });
+    expect(updates()).toEqual([]);
+  });
+
+  it("refuses a booking that has already started", async () => {
+    detailsEdit({ ...CURRENT, starts_at: "2020-01-07T14:00:00+00:00", ends_at: "2020-01-07T15:00:00+00:00" });
+    expect(await editBooking(MOVED)).toEqual({
+      ok: false,
+      error: "This session has already started, so it can't be changed.",
+    });
+    expect(updates()).toEqual([]);
+  });
+
+  it("says the session has started when the database refuses the edit for that reason", async () => {
+    move(CURRENT, [], { data: null, error: { code: "PF002" } });
+    expect(await editBooking(MOVED)).toEqual({
+      ok: false,
+      error: "This session has already started, so it can't be changed.",
+    });
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("keeps an email on a website booking, but lets an admin booking drop it", async () => {
+    detailsEdit();
+    expect(await editBooking({ ...UNCHANGED, email: "  " })).toEqual({
+      ok: false,
+      error: "A booking made on the website needs an email address. Please add one.",
+    });
+    expect(updates()).toEqual([]);
+
+    detailsEdit({ ...CURRENT, source: "admin" });
+    expect(await editBooking({ ...UNCHANGED, email: "" })).toMatchObject({ ok: true });
+    expect(updates()[0]).toMatchObject({ email: null });
+  });
+
+  it("never changes where the booking came from", async () => {
+    move();
+    await editBooking(MOVED);
+    expect(updates()[0]).not.toHaveProperty("source");
+  });
+
+  it.each([
+    [{ name: "  " }, "Please enter the client's name."],
+    [{ email: "jordan@" }, "Please check the email address, or leave it blank."],
+    [{ time: "10:10" }, "Please choose a start time on the quarter hour."],
+    [{ minutes: 50 }, "Please choose how long the session is."],
+    [{ date: "2020-01-07" }, "Please choose a time that hasn't passed yet."],
+  ])("checks the fields like adding a booking: rejects %o, touching nothing", async (change, error) => {
+    move();
+    expect(await editBooking({ ...MOVED, ...change })).toEqual({ ok: false, error });
+    expect(db.calls).toEqual([]);
+  });
+
+  it("rejects input that is not the right shape, or a bad id (posted by hand)", async () => {
+    expect(await editBooking(null as never)).toMatchObject({ ok: false });
+    expect(await editBooking({ ...MOVED, id: "not-a-uuid" })).toMatchObject({ ok: false });
+    expect(await editBooking({ ...MOVED, id: 42 } as never)).toMatchObject({ ok: false });
+    expect(await editBooking({ ...MOVED, minutes: "60" } as never)).toMatchObject({ ok: false });
+    expect(db.calls).toEqual([]);
+  });
+
+  it("reports a failed save without emailing anyone", async () => {
+    move(CURRENT, [], { data: null, error: { code: "42501" } });
+    expect(await editBooking(MOVED)).toEqual({ ok: false, error: "Sorry, that did not save. Please try again." });
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the session", async () => {
+    db.user = null;
+    await expect(editBooking(MOVED)).rejects.toThrow("NEXT_REDIRECT");
+    expect(updates()).toEqual([]);
   });
 });
