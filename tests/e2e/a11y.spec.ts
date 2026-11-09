@@ -548,6 +548,44 @@ test.describe("/book (booking calendar)", () => {
     await expectKeyboardAndTargets(page, "/book (thank-you)");
   });
 
+  test("booking another session: details kept, focus follows, cap after three, axe, keyboard, 48px targets", async ({ page }) => {
+    const email = testEmail();
+    await pickFirstTime(page);
+    await requestTime(page, email);
+    const thanks = page.getByRole("heading", { level: 1, name: /^Thank you — your request/ });
+    await expect(thanks).toBeFocused();
+    const another = page.getByRole("button", { name: "Book another session" });
+    await expect(another).toBeVisible();
+
+    for (let booked = 1; booked < 3; booked++) {
+      await another.click();
+      await expect(page.getByRole("heading", { level: 1, name: "Book a session" })).toBeFocused();
+      const days = page.locator("button.booking-day--open");
+      await days.first().click();
+      await page.locator(".booking-times").getByRole("button").first().click();
+      const form = page.getByRole("form", { name: "Your details" });
+      await expect(form.getByLabel("Your name")).toHaveValue("Pat Example");
+      await expect(form.getByLabel("Your email address")).toHaveValue(email);
+      if (booked === 1) {
+        await expectNoSeriousViolations(page, "/book (booking another, details form)");
+        await expectKeyboardAndTargets(page, "/book (booking another, details form)");
+      }
+      await form.getByRole("button", { name: "Request this session" }).click();
+      await expect(page.getByRole("heading", { level: 1, name: "Thank you — your requests are in" })).toBeFocused();
+      await expect(page.getByRole("status").getByRole("listitem")).toHaveCount(booked + 1);
+    }
+
+    await expect(another).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText("You have 3 requests waiting — we'll be in touch to confirm.");
+    await expectNoSeriousViolations(page, "/book (three requests waiting)");
+    await expectKeyboardAndTargets(page, "/book (three requests waiting)");
+    expect(await page.evaluate(() => localStorage.length + sessionStorage.length), "nothing in browser storage").toBe(0);
+
+    // A reload starts fresh: nothing pre-filled.
+    await pickFirstTime(page);
+    await expect(page.getByRole("form", { name: "Your details" }).getByLabel("Your name")).toHaveValue("");
+  });
+
   test("a time taken in the meantime (alert): axe, keyboard, 48px targets, focus", async ({ page, request }) => {
     const slot = await pickFirstTime(page);
     // Someone else requests the same time while the form is open.

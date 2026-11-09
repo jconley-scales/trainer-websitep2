@@ -36,25 +36,41 @@ function monthGrid(year: number, month: number): number[][] {
   return weeks;
 }
 
-/** Offered times minus the ones already booked. If the lookup fails, offer all
- *  of them: the database still refuses a time that is taken. */
-async function loadAvailableDays(): Promise<AvailableDay[]> {
+/** Offered times minus the ones already booked, including `alsoTaken` (this
+ *  visit's own requests, in case the lookup is behind or fails). If the lookup
+ *  fails, offer the rest: the database still refuses a time that is taken. */
+async function loadAvailableDays(alsoTaken: readonly AvailableSlot[]): Promise<AvailableDay[]> {
   const taken = await getTakenTimes().catch(() => [] as number[]);
-  return withoutTaken(availableDays(new Date()), new Set(taken));
+  const all = new Set([...taken, ...alsoTaken.map((slot) => Date.parse(slot.startsAt))]);
+  return withoutTaken(availableDays(new Date()), all);
 }
 
-/** `onBooked` gets the requested time once the request has gone through; the
- *  page then replaces itself with the thank-you. */
-export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) => void }) {
+/** The contact details a visitor gives, kept (in memory only) so they can book
+ *  again in the same visit without typing them out a second time. */
+export type ContactDetails = { name: string; email: string; phone: string };
+
+/** `onBooked` gets the requested time and the details used once the request
+ *  has gone through; the page then replaces itself with the thank-you.
+ *  `initialDetails` pre-fills the form when booking again in the same visit,
+ *  and `alsoTaken` (the times already requested this visit) are not offered. */
+export function BookingCalendar({
+  onBooked,
+  initialDetails,
+  alsoTaken = [],
+}: {
+  onBooked: (slot: AvailableSlot, details: ContactDetails) => void;
+  initialDetails?: ContactDetails;
+  alsoTaken?: readonly AvailableSlot[];
+}) {
   // Availability is computed on the client (current time), so the page itself
   // stays static. The server action re-validates the chosen slot on submit.
   const [days, setDays] = useState<AvailableDay[] | null>(null);
   const [monthIndex, setMonthIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(initialDetails?.name ?? "");
+  const [email, setEmail] = useState(initialDetails?.email ?? "");
+  const [phone, setPhone] = useState(initialDetails?.phone ?? "");
   const [note, setNote] = useState("");
   const [website, setWebsite] = useState("");
   const [step, setStep] = useState<Step>("idle");
@@ -69,12 +85,14 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
 
   useEffect(() => {
     let cancelled = false;
-    loadAvailableDays().then((fresh) => {
+    loadAvailableDays(alsoTaken).then((fresh) => {
       if (!cancelled) setDays(fresh);
     });
     return () => {
       cancelled = true;
     };
+    // Loaded once per showing of the calendar; the page remounts it to book again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Same markup on the server and the first client paint, so no hydration clash.
@@ -116,10 +134,10 @@ export function BookingCalendar({ onBooked }: { onBooked: (slot: AvailableSlot) 
       endsAt: selectedSlot.endsAt,
     });
     if (result.ok) {
-      onBooked(selectedSlot);
+      onBooked(selectedSlot, { name, email, phone });
     } else if (result.taken) {
       // Someone else got there first: show the up-to-date times and say so.
-      const fresh = await loadAvailableDays();
+      const fresh = await loadAvailableDays(alsoTaken);
       setDays(fresh);
       setSelectedSlot(null);
       if (!fresh.some((day) => day.date === selectedDate)) setSelectedDate(null);

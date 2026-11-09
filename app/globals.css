@@ -1342,7 +1342,8 @@ button.slot-row.is-selected:hover:not(:disabled) {
   max-width: 36rem;
 }
 
-.booking-chosen {
+.booking-chosen,
+.booking-success-list {
   font-size: var(--font-large);
 }
 
