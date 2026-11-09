@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { cancelBooking, confirmBooking, setBookingStatus } from "./actions";
+import { NO_EMAIL } from "./copy";
 import { CANCEL_REASON_MAX, CONFIRM_NOTE_MAX } from "./limits";
 
 type Status = "new" | "confirmed" | "cancelled";
@@ -16,7 +17,10 @@ const ACTIONS: Record<Status, { to: Status; label: string; className: string }[]
   cancelled: [{ to: "new", label: "Reopen", className: "button button-secondary" }],
 };
 
-/** Confirming and cancelling both email the client, so each asks first in a panel. */
+/**
+ * Confirming and cancelling email the client by default, so each asks first in
+ * a panel, which also offers "Don't email the client" (unticked by default).
+ */
 type PanelKind = "confirmed" | "cancelled";
 
 /** What each panel says and does. `name` is the client's first name; `when` the day and time. */
@@ -91,10 +95,12 @@ export function BookingStatusButtons({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<PanelKind | null>(null);
   const [text, setText] = useState("");
+  const [skipEmail, setSkipEmail] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const questionId = useId();
   const fieldId = useId();
+  const checkboxId = useId();
   const hintId = useId();
   const questionRef = useRef<HTMLParagraphElement>(null);
   const buttonRefs = useRef<Partial<Record<Status, HTMLButtonElement | null>>>({});
@@ -115,7 +121,10 @@ export function BookingStatusButtons({
     setOutcome(null);
     if (to in PANELS) {
       const kind = to as PanelKind;
-      if (open !== kind) setText("");
+      if (open !== kind) {
+        setText("");
+        setSkipEmail(false);
+      }
       setOpen(kind);
       return;
     }
@@ -137,18 +146,20 @@ export function BookingStatusButtons({
     event.preventDefault();
     if (!open) return;
     const panel = PANELS[open];
+    const skipped = hasEmail && skipEmail;
     setError(null);
     startTransition(async () => {
-      const result = await panel.send(id, text);
+      const result = await panel.send(id, skipped ? "" : text, skipped);
       if (!result.ok) {
         setError(result.error);
         return;
       }
       setOpen(null);
       setText("");
+      setSkipEmail(false);
       setOutcome(
         result.emailed === null
-          ? { kind: "done", text: `${panel.done}. ${noEmail}` }
+          ? { kind: "done", text: `${panel.done}. ${skipped ? `${clientFirstName} has not been emailed.` : NO_EMAIL}` }
           : result.emailed
           ? { kind: "done", text: `${panel.done}. ${clientFirstName} has been emailed.` }
           : {
@@ -160,7 +171,8 @@ export function BookingStatusButtons({
   }
 
   const panel = open ? PANELS[open] : null;
-  const noEmail = `There's no email for ${clientFirstName}, so please let them know yourself.`;
+  /** Whether submitting this panel will email the client. */
+  const emailing = hasEmail && !skipEmail;
 
   return (
     <div className="stack">
@@ -189,9 +201,22 @@ export function BookingStatusButtons({
             <p id={questionId} ref={questionRef} tabIndex={-1} className="confirm-panel-question">
               {panel.question(clientFirstName, when)}
             </p>
-            <p className="confirm-panel-lead">{hasEmail ? panel.lead : noEmail}</p>
+            <p className="confirm-panel-lead">
+              {!hasEmail ? NO_EMAIL : emailing ? panel.lead : `${clientFirstName} won't be emailed.`}
+            </p>
           </div>
           {hasEmail ? (
+            <div className="check-field">
+              <input
+                id={checkboxId}
+                type="checkbox"
+                checked={skipEmail}
+                onChange={(e) => setSkipEmail(e.target.checked)}
+              />
+              <label htmlFor={checkboxId}>Don&apos;t email the client</label>
+            </div>
+          ) : null}
+          {emailing ? (
             <div className="field">
               <label htmlFor={fieldId}>{panel.fieldLabel(clientFirstName)}</label>
               <p id={hintId} className="field-hint">
@@ -209,7 +234,7 @@ export function BookingStatusButtons({
           ) : null}
           <div className="button-row">
             <button type="submit" className={panel.submitClassName} disabled={pending}>
-              {hasEmail ? panel.submitLabel(clientFirstName) : panel.noEmailSubmitLabel}
+              {emailing ? panel.submitLabel(clientFirstName) : panel.noEmailSubmitLabel}
             </button>
             <button type="button" className="button button-secondary" disabled={pending} onClick={closePanel}>
               {panel.backLabel}

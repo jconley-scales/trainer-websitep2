@@ -5,6 +5,7 @@ import { gymTimeToUtc, utcToGymTime } from "@/lib/booking-availability";
 import { firstName, formatDayMonthTime } from "@/lib/format";
 import { editBooking } from "./actions";
 import { BookingFields, type BookingFormFields } from "./booking-fields";
+import { NO_EMAIL } from "./copy";
 
 /** What the edit form needs to know about a booking (as /admin loads it). */
 export type EditableBookingData = {
@@ -49,8 +50,6 @@ function fieldsFrom(b: EditableBookingData): BookingFormFields {
 
 /** What happened after saving, shown on the card. */
 type Outcome = { kind: "saved" | "not-emailed"; text: string };
-
-const NO_EMAIL = "No email on file — let them know yourself.";
 
 /**
  * A booking card's body with an "Edit" button that turns the card into the

@@ -63,6 +63,34 @@ describe("cancelling a booking", () => {
     expect(cancelBooking).not.toHaveBeenCalled();
   });
 
+  it("with Don't email the client ticked, asks for no reason and cancels without emailing", async () => {
+    vi.mocked(cancelBooking).mockResolvedValue({ ok: true, emailed: null });
+    renderBooking("confirmed");
+    fireEvent.click(cancelButton());
+    const dontEmail = screen.getByRole("checkbox", { name: "Don't email the client" });
+    expect(dontEmail).not.toBeChecked();
+    fireEvent.click(dontEmail);
+
+    expect(screen.getByRole("form", { name: QUESTION })).toHaveTextContent("Jordan won't be emailed.");
+    expect(screen.queryByLabelText(REASON)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Yes, cancel" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Cancelled. Jordan has not been emailed.");
+    expect(cancelBooking).toHaveBeenCalledWith(ID, "", true);
+  });
+
+  it("unticking Don't email the client brings the reason back, as typed", () => {
+    renderBooking("new");
+    fireEvent.click(cancelButton());
+    fireEvent.change(screen.getByLabelText(REASON), { target: { value: "I'm away that week." } });
+    const dontEmail = screen.getByRole("checkbox", { name: "Don't email the client" });
+    fireEvent.click(dontEmail);
+    fireEvent.click(dontEmail);
+
+    expect(screen.getByLabelText(REASON)).toHaveValue("I'm away that week.");
+    expect(screen.getByRole("button", { name: "Yes, cancel and email Jordan" })).toBeInTheDocument();
+  });
+
   it("only one panel is open at a time: Cancel closes the confirm panel", () => {
     renderBooking("new");
     fireEvent.click(screen.getByRole("button", { name: /^Confirm/ }));
@@ -79,7 +107,7 @@ describe("cancelling a booking", () => {
     fireEvent.click(screen.getByRole("button", { name: "Yes, cancel and email Jordan" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Cancelled. Jordan has been emailed.");
-    expect(cancelBooking).toHaveBeenCalledWith(ID, "I'm unwell this week.");
+    expect(cancelBooking).toHaveBeenCalledWith(ID, "I'm unwell this week.", false);
     expect(confirmBooking).not.toHaveBeenCalled();
     expect(screen.queryByRole("form", { name: QUESTION })).toBeNull();
   });
@@ -142,9 +170,10 @@ describe("cancelling a booking that has no email (added by the trainer)", () => 
     renderNoEmailBooking();
 
     const panel = screen.getByRole("form", { name: QUESTION });
-    expect(panel).toHaveTextContent("There's no email for Jordan, so please let them know yourself.");
+    expect(panel).toHaveTextContent("No email on file — let them know yourself.");
     expect(screen.queryByLabelText(REASON)).toBeNull();
     expect(screen.getByRole("button", { name: "Yes, cancel" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
   it("cancels and reminds the trainer to tell the client", async () => {
@@ -153,8 +182,8 @@ describe("cancelling a booking that has no email (added by the trainer)", () => 
     fireEvent.click(screen.getByRole("button", { name: "Yes, cancel" }));
 
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Cancelled. There's no email for Jordan, so please let them know yourself.");
-    expect(cancelBooking).toHaveBeenCalledWith(ID, "");
+    expect(status).toHaveTextContent("Cancelled. No email on file — let them know yourself.");
+    expect(cancelBooking).toHaveBeenCalledWith(ID, "", false);
     await waitFor(() => expect(status).toHaveFocus());
   });
 });

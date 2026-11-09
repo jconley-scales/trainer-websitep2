@@ -20,7 +20,8 @@ import {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 /**
  * `emailed` is false when the booking was confirmed but the client's email did
- * not send, and null when the booking has no email to send to (an admin booking).
+ * not send, and null when no email was sent on purpose: the booking has no
+ * email (an admin booking), or the trainer chose "Don't email the client".
  */
 export type ConfirmResult = { ok: true; emailed: boolean | null } | { ok: false; error: string };
 /** `emailed` as for ConfirmResult, for a cancelled booking. */
@@ -122,9 +123,11 @@ export async function setBookingStatus(id: string, status: string): Promise<Acti
  * a second tab cannot email the client twice.
  *
  * Unlike the new-booking alert this waits for the email: the trainer is told
- * if it did not send, and the booking stays confirmed either way.
+ * if it did not send, and the booking stays confirmed either way. `skipEmail`
+ * (only a real `true`) confirms without emailing, for a client the trainer has
+ * already told; a booking with no email is never emailed whatever it says.
  */
-export async function confirmBooking(id: string, note: string): Promise<ConfirmResult> {
+export async function confirmBooking(id: string, note: string, skipEmail = false): Promise<ConfirmResult> {
   if (typeof id !== "string" || !UUID.test(id) || typeof note !== "string") {
     return { ok: false, error: "That change could not be made." };
   }
@@ -155,7 +158,7 @@ export async function confirmBooking(id: string, note: string): Promise<ConfirmR
     return { ok: false, error: "That booking could not be changed. Please refresh the page." };
   }
   revalidatePath("/admin");
-  if (!booking.email) return { ok: true, emailed: null };
+  if (!booking.email || skipEmail === true) return { ok: true, emailed: null };
 
   try {
     await sendBookingConfirmation({
@@ -181,9 +184,9 @@ export async function confirmBooking(id: string, note: string): Promise<ConfirmR
  * The update only matches the status that was just read, so if the booking
  * changed in between (another tab), nothing is cancelled and no email is sent.
  * Like confirmBooking, this waits for the email and the booking stays
- * cancelled whether or not it sends.
+ * cancelled whether or not it sends, and `skipEmail` sends nothing.
  */
-export async function cancelBooking(id: string, reason: string): Promise<CancelResult> {
+export async function cancelBooking(id: string, reason: string, skipEmail = false): Promise<CancelResult> {
   if (typeof id !== "string" || !UUID.test(id) || typeof reason !== "string") {
     return { ok: false, error: "That change could not be made." };
   }
@@ -221,7 +224,7 @@ export async function cancelBooking(id: string, reason: string): Promise<CancelR
   if (error) return failed;
   if (!data || data.length === 0) return notChanged;
   revalidatePath("/admin");
-  if (!booking.email) return { ok: true, emailed: null };
+  if (!booking.email || skipEmail === true) return { ok: true, emailed: null };
 
   try {
     await sendBookingCancellation({

@@ -62,7 +62,7 @@ describe("confirming a booking", () => {
     fireEvent.click(screen.getByRole("button", { name: "Yes, confirm and email Jordan" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Confirmed. Jordan has been emailed.");
-    expect(confirmBooking).toHaveBeenCalledWith(ID, "Meet at Oakledge Park.");
+    expect(confirmBooking).toHaveBeenCalledWith(ID, "Meet at Oakledge Park.", false);
     expect(screen.queryByRole("form", { name: QUESTION })).toBeNull();
   });
 
@@ -76,6 +76,25 @@ describe("confirming a booking", () => {
       "Confirmed, but the email to Jordan didn't send. Please call or email them yourself.",
     );
     await waitFor(() => expect(alert).toHaveFocus());
+  });
+
+  it('offers "Don\'t email the client", unticked, so the email goes unless the trainer opts out', () => {
+    fireEvent.click(renderNewBooking());
+    expect(screen.getByRole("checkbox", { name: "Don't email the client" })).not.toBeChecked();
+  });
+
+  it("with Don't email the client ticked, asks for no note and confirms without emailing", async () => {
+    vi.mocked(confirmBooking).mockResolvedValue({ ok: true, emailed: null });
+    fireEvent.click(renderNewBooking());
+    fireEvent.change(screen.getByLabelText("Note for Jordan (optional)"), { target: { value: "Hi" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Don't email the client" }));
+
+    expect(screen.getByRole("form", { name: QUESTION })).toHaveTextContent("Jordan won't be emailed.");
+    expect(screen.queryByLabelText("Note for Jordan (optional)")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Yes, confirm" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Confirmed. Jordan has not been emailed.");
+    expect(confirmBooking).toHaveBeenCalledWith(ID, "", true);
   });
 
   it("keeps the panel open with the note when confirming fails", async () => {

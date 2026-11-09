@@ -104,6 +104,9 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   An admin booking sends the client the Confirmed email only if it has an
   email, and never sends the trainer a new-booking email. Bookings with no
   email get no confirm/cancel email; the actions return `emailed: null`.
+  Confirm and Cancel also offer "Don't email the client" (unticked by
+  default); `confirmBooking`/`cancelBooking` skip the email only for
+  `skipEmail === true`, and also return `emailed: null`.
 
 ## Conventions
 

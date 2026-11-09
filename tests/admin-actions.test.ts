@@ -146,6 +146,23 @@ describe("confirmBooking", () => {
     await expect(confirmBooking(ID, "")).rejects.toThrow("NEXT_REDIRECT");
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
   });
+
+  it("confirms without emailing when the trainer chooses Don't email the client", async () => {
+    expect(await confirmBooking(ID, "Meet at Oakledge Park.", true)).toEqual({ ok: true, emailed: null });
+    expect(db.calls).toContainEqual(["update", [{ status: "confirmed" }]]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("only skips the email for a real true, so a stray value sent by direct POST still emails", async () => {
+    expect(await confirmBooking(ID, "", "yes" as unknown as boolean)).toEqual({ ok: true, emailed: true });
+    expect(sendBookingConfirmation).toHaveBeenCalledOnce();
+  });
+
+  it("re-checks the session even when not emailing", async () => {
+    db.user = null;
+    await expect(confirmBooking(ID, "", true)).rejects.toThrow("NEXT_REDIRECT");
+    expect(db.calls.filter(([m]) => m === "update")).toEqual([]);
+  });
 });
 
 describe("cancelBooking", () => {
@@ -258,6 +275,25 @@ describe("cancelBooking", () => {
     db.user = null;
     await expect(cancelBooking(ID, "")).rejects.toThrow("NEXT_REDIRECT");
     expect(sendBookingCancellation).not.toHaveBeenCalled();
+  });
+
+  it("cancels without emailing when the trainer chooses Don't email the client", async () => {
+    bookingWas("confirmed");
+    expect(await cancelBooking(ID, "I'm away that week.", true)).toEqual({ ok: true, emailed: null });
+    expect(db.calls).toContainEqual(["update", [{ status: "cancelled" }]]);
+    expect(sendBookingCancellation).not.toHaveBeenCalled();
+  });
+
+  it("only skips the email for a real true, so a stray value sent by direct POST still emails", async () => {
+    bookingWas("new");
+    expect(await cancelBooking(ID, "", 1 as unknown as boolean)).toEqual({ ok: true, emailed: true });
+    expect(sendBookingCancellation).toHaveBeenCalledOnce();
+  });
+
+  it("re-checks the session even when not emailing", async () => {
+    db.user = null;
+    await expect(cancelBooking(ID, "", true)).rejects.toThrow("NEXT_REDIRECT");
+    expect(db.calls.filter(([m]) => m === "update")).toEqual([]);
   });
 });
 
