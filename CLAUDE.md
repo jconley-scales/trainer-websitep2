@@ -74,22 +74,27 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   bookings (RLS via `is_admin()`); they skip the slot schedule, are saved as
   confirmed, and are exempt from the per-email cap. See
   `docs/adr/0001-admin-bookings.md` and `GLOSSARY.md`.
-- Every website request records a `session_type`: `'one-on-one'`, `'partner'`,
-  `'virtual-one-on-one'` or `'virtual-partner'` (migrations `0011`, `0012`;
-  text plus a check, no enum). The ids and labels live in
+- Every booking records a `session_type`: `'one-on-one'`, `'partner'`,
+  `'virtual-one-on-one'` or `'virtual-partner'` (migrations `0011`, `0012`,
+  `0013`; text plus a check, no enum). The ids and labels live in
   `lib/session-types.ts`, which form, action, emails and /admin all import;
-  `SITE.pricing` keeps its own copy and a unit test checks they agree. The
-  column is nullable: older rows have no type (not backfilled) and admin
-  bookings may leave it out. The public insert policy requires it, and so does
-  `submitBooking`, which rejects a missing or unknown value. (The column's
-  check only limits the values; "required for website requests" is not a
-  check, since that would also block updating older untyped rows.)
+  `SITE.pricing` keeps its own copy and a unit test checks they agree.
+  Every row created since migration `0013`, website or admin, must have one:
+  a check allows null only when `created_at` is before that migration ran,
+  so older rows may stay untyped (not backfilled) and can still be updated.
+  To keep that from being dodged by backdating, the public keys may insert
+  only the booking's own columns, never `created_at`. `submitBooking` and
+  `addBooking` reject a missing or unknown value ("Add a booking" defaults to
+  1-on-1). The trainer may set or change it in `editBooking`, but a type once
+  recorded can't be cleared (the edit trigger raises `23514`); an older
+  untyped booking can be saved without choosing one.
   Its `format` picks the schedule: in-person types use the in-person slots,
   virtual types the virtual slots (weekends 11 to 4), and `submitBooking`
   refuses a time from the wrong one. Otherwise scheduling ignores it: same
-  index, same per-email cap. The admin card shows a tag ("1-on-1", "Virtual
-  partner", ...); the trainer's new-booking email and the Confirmed email add a
-  "Session:" line, left out when there is no type. The video link is not
+  index, same per-email cap; admin bookings skip the schedule whatever their
+  type. The admin card shows a tag ("1-on-1", "Virtual partner", ...); the
+  trainer's new-booking email, the Confirmed email and "Your session has
+  moved" add a "Session:" line, left out when there is no type. The video link is not
   stored; the trainer sends it in the Confirmed email's note.
 - Taken times come from the `taken_booking_times()` SECURITY DEFINER function,
   which returns each live booking's start and end only, never who booked
@@ -104,11 +109,11 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
 - `addBooking` also blocks an exact start-time clash itself; a booking that
   only overlaps another live one gets a warning naming it, and "Save anyway".
 - The trainer can edit or move a live booking that hasn't started (`editBooking`,
-  migration `0010`): admins may update name, email, phone, note, start and end,
-  never `source`. A trigger stamps `updated_at` (the "Edited" tag) when any of
-  those change and raises `PF002` for a cancelled or started booking. A new
-  time follows the add rules (clash blocked, overlap warned). Changing details
-  only emails nobody; moving a confirmed booking sends "Your session has moved"
+  migrations `0010`, `0013`): admins may update name, email, phone, note, start,
+  end and session type, never `source`. A trigger stamps `updated_at` (the
+  "Edited" tag) when any of those change and raises `PF002` for a cancelled or
+  started booking. A new time follows the add rules (clash blocked, overlap
+  warned). Changing details only emails nobody; moving a confirmed booking sends "Your session has moved"
   (`sendBookingMoved`); moving a new request also confirms it and sends the
   Confirmed email. "Don't email the client" suppresses either.
 - Each email may hold at most 3 live future website requests (admin bookings

@@ -125,8 +125,8 @@ describe.skipIf(!running)("booking spam guards (local Supabase)", () => {
     const slots = await freeSlots(4);
     const who = email("regular");
     const { error: seedError } = await admin.from("booking_requests").insert([
-      { name: "Pat Example", email: who, starts_at: "2020-01-02T13:00:00Z", ends_at: "2020-01-02T14:00:00Z", status: "new" },
-      { name: "Pat Example", email: who, starts_at: slots[3].startsAt, ends_at: slots[3].endsAt, status: "cancelled" },
+      { name: "Pat Example", email: who, starts_at: "2020-01-02T13:00:00Z", ends_at: "2020-01-02T14:00:00Z", status: "new", session_type: "one-on-one" },
+      { name: "Pat Example", email: who, starts_at: slots[3].startsAt, ends_at: slots[3].endsAt, status: "cancelled", session_type: "one-on-one" },
     ]);
     expect(seedError).toBeNull();
 
@@ -159,6 +159,7 @@ describe.skipIf(!running)("booking spam guards (local Supabase)", () => {
       ends_at: new Date(start + 45 * 60_000).toISOString(),
       status: "confirmed",
       source: "admin",
+      session_type: "one-on-one",
     });
     expect(seedError).toBeNull();
     expect(await isTaken(slot)).toBe(true);

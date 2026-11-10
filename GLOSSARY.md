@@ -24,7 +24,7 @@ Where a booking came from: the website or the trainer (admin).
 _Avoid_: Origin, channel
 
 **Session type**:
-The kind of session a booking is for: 1-on-1 (the client alone) or Partner (the client and one other person, priced for both), each either in person or virtual. Chosen by the visitor on the website; not recorded for older bookings.
+The kind of session a booking is for: 1-on-1 (the client alone) or Partner (the client and one other person, priced for both), each either in person or virtual. Chosen by the visitor on the website, or by the trainer for an admin booking; every new booking has one. Not recorded for older bookings, until the trainer sets one when editing.
 _Avoid_: Service, pair
 
 **Virtual session**:

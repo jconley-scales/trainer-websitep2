@@ -19,6 +19,7 @@ const JORDAN: EditableBookingData = {
   ends_at: "2030-10-25T14:00:00+00:00",
   status: "confirmed",
   source: "website",
+  session_type: "one-on-one",
 };
 const SAM: EditableBookingData = {
   ...JORDAN,
@@ -40,6 +41,7 @@ const JORDAN_FIELDS = {
   date: "2030-10-25",
   time: "09:00",
   minutes: 60,
+  sessionType: "one-on-one",
 };
 
 function renderCards(bookings: EditableBookingData[] = [JORDAN, SAM]) {
@@ -93,6 +95,60 @@ describe("editing a booking from /admin", () => {
     // The card's details and its Confirm/Cancel buttons give way to the form.
     expect(card("Jordan Tester").queryByText("Details for Jordan Tester")).toBeNull();
     expect(card("Jordan Tester").queryByRole("button", { name: "Cancel the booking" })).toBeNull();
+  });
+
+  it("shows the booking's session type, required", () => {
+    renderCards();
+    const { form } = openEdit();
+    const group = within(form).getByRole("group", { name: "Session type" });
+
+    expect(within(group).getByRole("radio", { name: "1-on-1 training" })).toBeChecked();
+    for (const option of within(group).getAllByRole("radio")) expect(option).toBeRequired();
+  });
+
+  it("saves a change of session type alone as a details edit, saying nothing about email", async () => {
+    renderCards();
+    const { form } = openEdit();
+    fireEvent.click(within(form).getByRole("radio", { name: "Virtual partner training" }));
+
+    expect(within(form).queryByLabelText("Don't email the client")).toBeNull();
+    fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+    expect(await card("Jordan Tester").findByRole("status")).toHaveTextContent("Saved your changes to Jordan's booking.");
+    expect(editBooking).toHaveBeenCalledWith({ ...JORDAN_FIELDS, sessionType: "virtual-partner", skipEmail: false });
+  });
+
+  it("on a booking made before session types, chooses none, makes it optional and explains why", async () => {
+    renderCards([{ ...JORDAN, session_type: null }]);
+    const { form } = openEdit();
+    const group = within(form).getByRole("group", { name: "Session type" });
+
+    for (const option of within(group).getAllByRole("radio")) {
+      expect(option).not.toBeChecked();
+      expect(option).not.toBeRequired();
+    }
+    expect(group).toHaveAccessibleDescription("Not recorded for this booking. Choose one if you know it.");
+
+    // Once one is chosen the hint no longer applies.
+    fireEvent.click(within(group).getByRole("radio", { name: "Partner training" }));
+    expect(group).not.toHaveAccessibleDescription();
+    expect(within(form).queryByText(/Not recorded for this booking/)).toBeNull();
+  });
+
+  it("saves a booking made before session types without choosing one", async () => {
+    renderCards([{ ...JORDAN, session_type: null }]);
+    const { form } = openEdit();
+
+    fireEvent.change(within(form).getByLabelText("Note (optional)"), { target: { value: "Bad left knee." } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
+
+    await card("Jordan Tester").findByRole("status");
+    expect(editBooking).toHaveBeenCalledWith({
+      ...JORDAN_FIELDS,
+      note: "Bad left knee.",
+      sessionType: null,
+      skipEmail: false,
+    });
   });
 
   it("marks email optional only on a booking the trainer added", () => {

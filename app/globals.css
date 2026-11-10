@@ -1526,6 +1526,40 @@ button.slot-row.is-selected:hover:not(:disabled) {
   gap: var(--space);
 }
 
+/* Session type on the trainer's booking form: the /book cards, smaller, two
+   to a row where there is room. The legend reads like the other field labels. */
+.session-type--admin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-type-legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-size: var(--font-large);
+  font-weight: 600;
+}
+
+.session-type--admin .session-type-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.session-type--admin .session-type-option {
+  padding: 0.5rem 1rem;
+}
+
+.session-type--admin .session-type-option:has(input:checked) {
+  padding: calc(0.5rem - 2px) calc(1rem - 2px);
+}
+
+.session-type--admin .session-type-title {
+  font-size: var(--font-base);
+  font-weight: 600;
+}
+
 /* The "are you sure?" panel under a booking's Confirm button. */
 .confirm-panel {
   padding: 1rem 1.25rem;

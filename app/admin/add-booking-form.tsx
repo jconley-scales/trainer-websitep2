@@ -15,6 +15,7 @@ const EMPTY: BookingFormFields = {
   date: "",
   time: "",
   minutes: BOOKING_DEFAULT_MINUTES,
+  sessionType: "one-on-one",
 };
 
 /** What happened after saving, shown under the button. */
@@ -23,7 +24,8 @@ type Outcome = { kind: "saved" | "not-emailed"; text: string };
 /**
  * "Add a booking" at the top of /admin: for a session the trainer arranged
  * with a client by phone or text. Opens a form inline; any future date and
- * quarter-hour time, only the name required. If the time overlaps another
+ * quarter-hour time, only the name (and the session type, 1-on-1 to start
+ * with) required. If the time overlaps another
  * booking the server says so, and the trainer can save anyway.
  */
 export function AddBookingForm() {

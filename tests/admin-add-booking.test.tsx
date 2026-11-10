@@ -29,6 +29,7 @@ const PHONE_BOOKING = {
   date: "2030-10-22",
   time: "10:15",
   minutes: 45,
+  sessionType: "one-on-one",
 };
 
 beforeEach(() => vi.mocked(addBooking).mockResolvedValue({ ok: true, emailed: null }));
@@ -49,6 +50,31 @@ describe("adding a booking from /admin", () => {
     for (const label of ["Email (optional)", "Phone (optional)", "Note (optional)"]) {
       expect(within(form).getByLabelText(label)).toBeInTheDocument();
     }
+  });
+
+  it("asks for the session type, required, with 1-on-1 chosen to start with", () => {
+    const { form } = openForm();
+    const group = within(form).getByRole("group", { name: "Session type" });
+    const options = within(group).getAllByRole("radio");
+
+    expect(options.map((o) => o.closest("label")?.textContent)).toEqual([
+      "1-on-1 training",
+      "Partner training",
+      "Virtual 1-on-1 training",
+      "Virtual partner training",
+    ]);
+    expect(within(group).getByRole("radio", { name: "1-on-1 training" })).toBeChecked();
+    for (const option of options) expect(option).toBeRequired();
+  });
+
+  it("saves the session type the trainer chose", async () => {
+    const { form } = openForm();
+    fillPhoneBooking(form);
+    fireEvent.click(within(form).getByRole("radio", { name: "Partner training" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Save booking" }));
+
+    await screen.findByRole("status");
+    expect(addBooking).toHaveBeenCalledWith({ ...PHONE_BOOKING, sessionType: "partner" });
   });
 
   it("offers every quarter hour of the day, and lengths in quarter hours defaulting to 1 hour", () => {

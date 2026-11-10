@@ -218,6 +218,8 @@ export type BookingMove = {
   /** Where it is now. */
   startsAt: string;
   endsAt: string;
+  /** Named under the new time when given; left out for bookings with no type recorded. */
+  sessionType: SessionType | null;
 };
 
 /**
@@ -242,6 +244,7 @@ export async function sendBookingMoved(move: BookingMove): Promise<void> {
     "Your new session:",
     "",
     ...sessionLines(move.startsAt, move.endsAt),
+    ...sessionTypeLine("    ", move.sessionType),
     "",
     "If the new time doesn't suit you, just reply to this email.",
     "",

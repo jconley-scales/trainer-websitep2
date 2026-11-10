@@ -672,6 +672,7 @@ test.describe("/book (booking calendar)", () => {
       email: testEmail(),
       starts_at: slot.startsAt,
       ends_at: slot.endsAt,
+      session_type: "one-on-one",
     });
     await requestTime(page, testEmail());
     await expect(page.locator("main").getByRole("alert")).toHaveText(
@@ -982,12 +983,16 @@ test.describe("/admin confirm and cancel panels", () => {
     await signInAsAdminWithBooking(page, request);
     const form = await openAddBooking(page);
     await expect(form.getByLabel("Length")).toHaveValue("60");
+    const sessionType = form.getByRole("group", { name: "Session type" });
+    await expect(sessionType.getByRole("radio")).toHaveCount(4);
+    await expect(sessionType.getByRole("radio", { name: "1-on-1 training", exact: true })).toBeChecked();
     await expectNoSeriousViolations(page, "/admin (add a booking form)");
 
     // Tab walks the form's own controls in order, each 48px with a focus ring.
-    // (The date input takes one Tab each for month, day and year.)
-    const expected = [
+    // The session type is one stop, on the chosen option.
+    expect(await tabThrough(page, 10)).toEqual([
       "Client's name",
+      "1-on-1 training",
       "Date",
       "Start time",
       "Length",
@@ -996,28 +1001,7 @@ test.describe("/admin confirm and cancel panels", () => {
       "Note (optional)",
       "Save booking",
       "Close",
-    ];
-    const reached: string[] = [];
-    for (let i = 0; i < 20 && reached.length < expected.length; i++) {
-      await page.keyboard.press("Tab");
-      const stop = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement;
-        const rect = el.getBoundingClientRect();
-        const style = getComputedStyle(el);
-        return {
-          label: ((el as HTMLInputElement).labels?.[0]?.textContent ?? el.textContent ?? "").trim(),
-          width: rect.width,
-          height: rect.height,
-          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
-        };
-      });
-      if (reached.at(-1) === stop.label) continue;
-      reached.push(stop.label);
-      expect(stop.height, `${stop.label} height`).toBeGreaterThanOrEqual(48);
-      expect(stop.width, `${stop.label} width`).toBeGreaterThanOrEqual(48);
-      expect(stop.outline, `${stop.label} focus ring`).toBe(true);
-    }
-    expect(reached).toEqual(expected);
+    ]);
 
     // "Close" returns focus to Add a booking; reopen to fill it in.
     await page.keyboard.press("Enter");
@@ -1031,6 +1015,8 @@ test.describe("/admin confirm and cancel panels", () => {
     while (day.getUTCDay() !== 2) day = new Date(day.getTime() + 86_400_000);
     const name = `Pat ${ADDED_MARK}-${randomUUID().slice(0, 8)}`;
     await form.getByLabel("Client's name").fill(name);
+    await sessionType.getByRole("radio", { name: "Partner training", exact: true }).check();
+    await expectNoSeriousViolations(page, "/admin (add a booking, partner chosen)");
     await form.getByLabel("Date").fill(day.toISOString().slice(0, 10));
     await form.getByLabel("Start time").selectOption("10:15");
     await form.getByLabel("Length").selectOption("45");
@@ -1042,15 +1028,14 @@ test.describe("/admin confirm and cancel panels", () => {
     await expect(form).toBeHidden();
 
     const card = page.locator(".admin-booking").filter({ hasText: name });
-    await expect(card.locator(".source-tag")).toHaveText("Added by you");
-    // No session type recorded, so no type tag.
-    await expect(card.locator(".session-type-tag")).toHaveCount(0);
+    await expect(card.locator(".source-tag:not(.session-type-tag)")).toHaveText("Added by you");
+    await expect(card.locator(".session-type-tag")).toHaveText("Partner");
     await expect(card.locator(".status-badge")).toHaveText("Confirmed");
     await expect(card).toContainText("No email given");
     await expect(card).toContainText("10:15 AM to 11:00 AM");
     await expect(card.locator('a[href^="mailto:"]')).toHaveCount(0);
     await expectNoSeriousViolations(page, "/admin (after adding a booking)");
-    expect(await contrastRatio(card.locator(".source-tag")), "Added by you tag").toBeGreaterThanOrEqual(4.5);
+    expect(await contrastRatio(card.locator(".source-tag:not(.session-type-tag)")), "Added by you tag").toBeGreaterThanOrEqual(4.5);
 
     // With no email on file, cancelling says so instead of offering to email.
     await card.getByRole("button", { name: /^Cancel the booking for Pat/ }).click();
@@ -1086,17 +1071,22 @@ test.describe("/admin confirm and cancel panels", () => {
 
     await form.getByRole("button", { name: "Save anyway" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Added Sam's session on" })).toBeFocused();
-    await expect(page.locator(".admin-booking").filter({ hasText: name }).locator(".source-tag")).toHaveText("Added by you");
+    await expect(page.locator(".admin-booking").filter({ hasText: name }).locator(".source-tag:not(.session-type-tag)")).toHaveText("Added by you");
   });
 
-  /** Tabs through the focused form, checking each stop is 48px with a focus ring; returns the labels reached. */
+  /**
+   * Tabs through the focused form, checking each stop is 48px with a focus
+   * ring; returns the labels reached. A radio's tap target is the card around
+   * it. (The date input takes one Tab each for month, day and year.)
+   */
   async function tabThrough(page: Page, count: number) {
     const reached: string[] = [];
     for (let i = 0; i < count + 12 && reached.length < count; i++) {
       await page.keyboard.press("Tab");
       const stop = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
-        const rect = el.getBoundingClientRect();
+        const wrapping = (el as HTMLInputElement).type === "radio" ? el.closest("label") : null;
+        const rect = (wrapping ?? el).getBoundingClientRect();
         const style = getComputedStyle(el);
         return {
           label: ((el as HTMLInputElement).labels?.[0]?.textContent ?? el.textContent ?? "").trim(),
@@ -1136,8 +1126,10 @@ test.describe("/admin confirm and cancel panels", () => {
     await expect(form.getByLabel("Length")).toHaveValue("60");
     await expectNoSeriousViolations(page, "/admin (edit form)");
 
-    expect(await tabThrough(page, 9)).toEqual([
+    await expect(form.getByRole("group", { name: "Session type" }).getByRole("radio", { name: "Partner training", exact: true })).toBeChecked();
+    expect(await tabThrough(page, 10)).toEqual([
       "Client's name",
+      "Partner training",
       "Date",
       "Start time",
       "Length",
@@ -1171,6 +1163,33 @@ test.describe("/admin confirm and cancel panels", () => {
     await expectNoSeriousViolations(page, "/admin (after editing)");
   });
 
+  test("edit a booking: change only the session type; Edited tag, no email, axe", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    await expect(card.locator(".session-type-tag")).toHaveText("Partner");
+    await card.getByRole("button", { name: "Edit the booking for Jordan Tester" }).click();
+    const form = page.getByRole("form", { name: "Edit Jordan's booking" });
+
+    // Arrow keys move within the group, as on any radio group.
+    await form.getByRole("radio", { name: "Partner training", exact: true }).focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(form.getByRole("radio", { name: "1-on-1 training", exact: true })).toBeChecked();
+    await expect(form.getByLabel("Don't email the client")).toHaveCount(0);
+    await expectNoSeriousViolations(page, "/admin (edit form, session type changed)");
+    await form.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(card.getByRole("status")).toHaveText("Saved your changes to Jordan's booking.");
+    await expect(card.locator(".session-type-tag")).toHaveText("1-on-1");
+    await expect(card.locator(".source-tag").filter({ hasText: "Edited" })).toBeVisible();
+    await expect(card.locator(".status-badge")).toHaveText("New request");
+    const saved = await request.get(
+      `${supabaseUrl}/rest/v1/booking_requests?id=eq.${seeded.bookingId}&select=session_type`,
+      { headers: adminHeaders },
+    );
+    expect(await saved.json()).toEqual([{ session_type: "one-on-one" }]);
+    await expectNoSeriousViolations(page, "/admin (after changing the session type)");
+  });
+
   test("move a booking: clash blocked, overlap warns, moving a request confirms it; Don't email the client", async ({ page, request }) => {
     await signInAsAdminWithBooking(page, request);
     const start = await seededStart(request);
@@ -1182,6 +1201,7 @@ test.describe("/admin confirm and cancel panels", () => {
       ends_at: new Date(otherStart + 3_600_000).toISOString(),
       status: "confirmed",
       source: "admin",
+      session_type: "one-on-one",
     });
     await page.reload();
 
@@ -1261,6 +1281,7 @@ test.describe("/admin confirm and cancel panels", () => {
       ends_at: new Date(pastStart + 3_600_000).toISOString(),
       status: "confirmed",
       source: "admin",
+      session_type: "one-on-one",
     });
     await page.reload();
 

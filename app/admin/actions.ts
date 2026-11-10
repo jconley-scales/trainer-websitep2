@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { gymTimeToUtc } from "@/lib/booking-availability";
 import { firstName, formatTime } from "@/lib/format";
 import { sendBookingCancellation, sendBookingConfirmation, sendBookingMoved } from "@/lib/notify";
-import { toSessionType } from "@/lib/session-types";
+import { isSessionType, toSessionType, type SessionType } from "@/lib/session-types";
 import { createClient } from "@/lib/supabase/server";
 import {
   BOOKING_EMAIL_MAX,
@@ -256,6 +256,11 @@ export type AddBookingInput = {
   time: string;
   /** The session length in minutes, one of BOOKING_LENGTHS. */
   minutes: number;
+  /**
+   * Required when adding. Null only when editing a booking made before session
+   * types were recorded, to leave it unrecorded; a type once set can't be cleared.
+   */
+  sessionType: SessionType | null;
   /** Save even though it overlaps another live booking (after the trainer saw the warning). */
   allowOverlap?: boolean;
 };
@@ -270,6 +275,7 @@ export type AddBookingResult =
   | { ok: false; error: string; overlap?: true };
 
 const CLASH = "Another booking already holds that time. Please choose another.";
+const SESSION_TYPE_MISSING = "Please choose the kind of session.";
 
 type ParsedBooking = {
   name: string;
@@ -278,6 +284,8 @@ type ParsedBooking = {
   note: string;
   startsAt: string;
   endsAt: string;
+  /** Null when none was chosen; addBooking and editBooking decide whether that's allowed. */
+  sessionType: SessionType | null;
 };
 
 /**
@@ -309,6 +317,8 @@ function parseBookingFields(
   if (name.length > BOOKING_NAME_MAX) {
     return fail(`Please shorten the name to ${BOOKING_NAME_MAX} characters or fewer.`);
   }
+  const sessionType = input.sessionType ?? null;
+  if (sessionType !== null && !isSessionType(sessionType)) return fail(SESSION_TYPE_MISSING);
   if (email && (!EMAIL_PATTERN.test(email) || email.length > BOOKING_EMAIL_MAX)) {
     return fail("Please check the email address, or leave it blank.");
   }
@@ -332,6 +342,7 @@ function parseBookingFields(
     note,
     startsAt: start.toISOString(),
     endsAt: new Date(start.getTime() + input.minutes * 60_000).toISOString(),
+    sessionType,
   };
 }
 
@@ -370,8 +381,9 @@ async function checkOverlaps(
 
 /**
  * Add an admin booking: one the trainer arranged with a client by phone or
- * text. Any future date and quarter-hour time, not just the public schedule;
- * saved as confirmed; no per-email cap (see docs/adr/0001-admin-bookings.md).
+ * text. Any future date and quarter-hour time, not just the public schedule
+ * (whatever the session type, which is required); saved as confirmed; no
+ * per-email cap (see docs/adr/0001-admin-bookings.md).
  *
  * Reachable by direct POST, so it re-checks every field and the session; the
  * insert runs as the signed-in user, so row level security only lets an admin
@@ -386,8 +398,9 @@ async function checkOverlaps(
 export async function addBooking(input: AddBookingInput): Promise<AddBookingResult> {
   const parsed = parseBookingFields(input);
   if (!parsed.ok) return parsed;
-  const { name, email, phone, note, startsAt, endsAt } = parsed;
+  const { name, email, phone, note, startsAt, endsAt, sessionType } = parsed;
   const fail = (error: string) => ({ ok: false, error }) as const;
+  if (!sessionType) return fail(SESSION_TYPE_MISSING);
 
   const supabase = await createClient();
   const {
@@ -409,13 +422,14 @@ export async function addBooking(input: AddBookingInput): Promise<AddBookingResu
     ends_at: endsAt,
     status: "confirmed",
     source: "admin",
+    session_type: sessionType,
   });
   if (error) return error.code === UNIQUE_VIOLATION ? fail(CLASH) : failed;
   revalidatePath("/admin");
 
   if (!email) return { ok: true, emailed: null };
   try {
-    await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "", sessionType: null });
+    await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "", sessionType });
   } catch (err) {
     console.error("Booking confirmation email could not be sent:", err);
     return { ok: true, emailed: false };
@@ -443,7 +457,9 @@ export type EditBookingResult =
 /**
  * Edit or move a live, future booking (website or admin) from /admin. The
  * fields and the new time follow addBooking's rules; `source` never changes,
- * and a website booking keeps an email (the database requires one).
+ * and a website booking keeps an email (the database requires one). The
+ * session type is one of the details: it may be left unrecorded only on a
+ * booking made before session types, and once recorded can't be cleared.
  *
  * Changing only the details emails nobody. Moving a confirmed booking emails
  * the client the old and new times; moving a new request also confirms it, and
@@ -462,7 +478,7 @@ export async function editBooking(input: EditBookingInput): Promise<EditBookingR
   }
   const parsed = parseBookingFields(input);
   if (!parsed.ok) return parsed;
-  const { name, email, phone, note, startsAt, endsAt } = parsed;
+  const { name, email, phone, note, startsAt, endsAt, sessionType } = parsed;
   const fail = (error: string) => ({ ok: false, error }) as const;
 
   const supabase = await createClient();
@@ -496,6 +512,8 @@ export async function editBooking(input: EditBookingInput): Promise<EditBookingR
   if (current.source === "website" && !email) {
     return fail("A booking made on the website needs an email address. Please add one.");
   }
+  // Only a booking made before session types may go without one, and a type once set stays.
+  if (!sessionType && current.session_type !== null) return fail(SESSION_TYPE_MISSING);
 
   const moved =
     Date.parse(current.starts_at) !== Date.parse(startsAt) || Date.parse(current.ends_at) !== Date.parse(endsAt);
@@ -514,6 +532,7 @@ export async function editBooking(input: EditBookingInput): Promise<EditBookingR
       note: note || null,
       starts_at: startsAt,
       ends_at: endsAt,
+      ...(sessionType ? { session_type: sessionType } : {}),
       ...(confirmed ? { status: "confirmed" } : {}),
     })
     .eq("id", input.id)
@@ -532,10 +551,9 @@ export async function editBooking(input: EditBookingInput): Promise<EditBookingR
   if (!moved || !email || input.skipEmail === true) return { ...done, emailed: null };
   try {
     if (confirmed) {
-      const sessionType = toSessionType(current.session_type);
       await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "", sessionType });
     } else {
-      await sendBookingMoved({ name, email, oldStartsAt: current.starts_at, startsAt, endsAt });
+      await sendBookingMoved({ name, email, oldStartsAt: current.starts_at, startsAt, endsAt, sessionType });
     }
   } catch (err) {
     console.error(`Booking ${confirmed ? "confirmation" : "moved"} email could not be sent:`, err);

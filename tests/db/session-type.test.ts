@@ -162,10 +162,10 @@ describe.skipIf(!running)("session type (local Supabase)", () => {
 
   it("keeps rows with no type recorded, and still lets them be confirmed", async () => {
     const who = email("old");
-    // Like a booking made before session types: no type at all.
+    // A booking made before session types: no type at all.
     const { data, error } = await service
       .from("booking_requests")
-      .insert({ name: "Pat Example", email: who, ...farTime() })
+      .insert({ name: "Pat Example", email: who, ...farTime(), created_at: "2025-06-01T00:00:00Z" })
       .select("id, session_type")
       .single();
     expect(error).toBeNull();

@@ -341,6 +341,7 @@ describe("addBooking", () => {
     date: "2030-10-22",
     time: "10:15",
     minutes: 45,
+    sessionType: "partner" as const,
   };
   /** 10:15 AM EDT is 14:15 UTC. */
   const STARTS = "2030-10-22T14:15:00.000Z";
@@ -373,6 +374,7 @@ describe("addBooking", () => {
             ends_at: ENDS,
             status: "confirmed",
             source: "admin",
+            session_type: "partner",
           },
         ],
       ],
@@ -401,11 +403,23 @@ describe("addBooking", () => {
       startsAt: STARTS,
       endsAt: ENDS,
       note: "",
-      // Admin bookings record no session type yet.
-      sessionType: null,
+      sessionType: "partner",
     });
     expect(notifyTrainerOfBooking).not.toHaveBeenCalled();
   });
+
+  it.each([undefined, null, "", "pair", "Partner", 1])(
+    "rejects a booking posted with session type %j, saving and sending nothing",
+    async (sessionType) => {
+      overlapping([]);
+      expect(await addBooking({ ...PHONE_BOOKING, sessionType } as never)).toEqual({
+        ok: false,
+        error: "Please choose the kind of session.",
+      });
+      expect(db.calls).toEqual([]);
+      expect(sendBookingConfirmation).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps the booking and reports it when the Confirmed email fails", async () => {
     overlapping([]);
@@ -514,6 +528,7 @@ describe("editBooking", () => {
     email: "jordan@example.com",
     starts_at: "2030-10-25T13:00:00+00:00",
     ends_at: "2030-10-25T14:00:00+00:00",
+    session_type: "one-on-one",
   };
   /** The form, filled in with the booking unchanged. */
   const UNCHANGED = {
@@ -525,6 +540,7 @@ describe("editBooking", () => {
     date: "2030-10-25",
     time: "09:00",
     minutes: 60,
+    sessionType: "one-on-one" as const,
   };
   /** Moved to Sunday, October 27 at 11:00 AM (15:00Z), still an hour. */
   const MOVED = { ...UNCHANGED, date: "2030-10-27", time: "11:00" };
@@ -567,10 +583,44 @@ describe("editBooking", () => {
         note: "Bad left knee.",
         starts_at: "2030-10-25T13:00:00.000Z",
         ends_at: "2030-10-25T14:00:00.000Z",
+        session_type: "one-on-one",
       },
     ]);
     expect(sendBookingMoved).not.toHaveBeenCalled();
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("changes only the session type as a details edit, emailing nobody", async () => {
+    detailsEdit({ ...CURRENT, status: "new" });
+    const result = await editBooking({ ...UNCHANGED, sessionType: "virtual-partner" });
+
+    expect(result).toEqual({ ok: true, moved: false, confirmed: false, emailed: null });
+    expect(updates()).toEqual([expect.objectContaining({ session_type: "virtual-partner" })]);
+    expect(updates()[0]).not.toHaveProperty("status");
+    expect(sendBookingMoved).not.toHaveBeenCalled();
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("saves a booking made before session types without one, leaving its type unrecorded", async () => {
+    detailsEdit({ ...CURRENT, session_type: null });
+    expect(await editBooking({ ...UNCHANGED, note: "Prefers mornings.", sessionType: null })).toMatchObject({ ok: true });
+    expect(updates()[0]).toMatchObject({ note: "Prefers mornings." });
+    expect(updates()[0]).not.toHaveProperty("session_type");
+  });
+
+  it("lets a booking made before session types be given one", async () => {
+    detailsEdit({ ...CURRENT, session_type: null });
+    expect(await editBooking({ ...UNCHANGED, sessionType: "partner" })).toMatchObject({ ok: true });
+    expect(updates()[0]).toMatchObject({ session_type: "partner" });
+  });
+
+  it("does not let a recorded session type be cleared", async () => {
+    detailsEdit();
+    expect(await editBooking({ ...UNCHANGED, sessionType: null })).toEqual({
+      ok: false,
+      error: "Please choose the kind of session.",
+    });
+    expect(updates()).toEqual([]);
   });
 
   it("emails the client the old and new times when a confirmed booking moves", async () => {
@@ -586,8 +636,24 @@ describe("editBooking", () => {
       oldStartsAt: CURRENT.starts_at,
       startsAt: NEW_STARTS,
       endsAt: NEW_ENDS,
+      sessionType: "one-on-one",
     });
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("names the session type as edited in the moved and Confirmed emails, and none when there is none", async () => {
+    move();
+    await editBooking({ ...MOVED, sessionType: "partner" });
+    expect(sendBookingMoved).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "partner" }));
+
+    move({ ...CURRENT, status: "new", session_type: null });
+    await editBooking({ ...MOVED, sessionType: "virtual-one-on-one" });
+    expect(sendBookingConfirmation).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "virtual-one-on-one" }));
+
+    move({ ...CURRENT, session_type: null });
+    sendBookingMoved.mockClear();
+    await editBooking({ ...MOVED, sessionType: null });
+    expect(sendBookingMoved).toHaveBeenCalledWith(expect.objectContaining({ sessionType: null }));
   });
 
   it("counts a new length as a move, since the session's end time changes", async () => {
@@ -768,9 +834,10 @@ describe("editBooking", () => {
     [{ time: "10:10" }, "Please choose a start time on the quarter hour."],
     [{ minutes: 50 }, "Please choose how long the session is."],
     [{ date: "2020-01-07" }, "Please choose a time that hasn't passed yet."],
+    [{ sessionType: "pair" }, "Please choose the kind of session."],
   ])("checks the fields like adding a booking: rejects %o, touching nothing", async (change, error) => {
     move();
-    expect(await editBooking({ ...MOVED, ...change })).toEqual({ ok: false, error });
+    expect(await editBooking({ ...MOVED, ...change } as never)).toEqual({ ok: false, error });
     expect(db.calls).toEqual([]);
   });
 

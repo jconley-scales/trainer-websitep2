@@ -38,9 +38,9 @@ let seeded = 0;
 async function bookingFrom(ago: string, who: { email?: string; phone?: string } = {}) {
   seeded += 1;
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.booking_requests (name, email, phone, starts_at, ends_at, status, source)
+    `insert into public.booking_requests (name, email, phone, starts_at, ends_at, status, source, session_type)
      select 'Pat Example', $1::text, $2, t, t + interval '1 hour', 'confirmed',
-       case when $1::text is null then 'admin' else 'website' end
+       case when $1::text is null then 'admin' else 'website' end, 'one-on-one'
      from (select now() - $3::interval + make_interval(mins => $4, secs => 7) as t) s
      returning id`,
     [who.email ?? null, who.phone ?? null, ago, seeded],

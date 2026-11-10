@@ -122,6 +122,7 @@ describe("sendBookingMoved", () => {
     oldStartsAt: "2030-10-25T13:00:00Z",
     startsAt: "2030-10-27T15:00:00Z",
     endsAt: "2030-10-27T15:45:00Z",
+    sessionType: null,
   };
 
   it("states the old and the new time plainly, in plain text, with the usual sender and sign-off", async () => {
@@ -154,6 +155,13 @@ describe("sendBookingMoved", () => {
         "Jervaughn Scales",
         "My Older Fitness",
       ].join("\n"),
+    );
+  });
+
+  it("names the session type under the new time, when the booking has one", async () => {
+    await sendBookingMoved({ ...MOVED, sessionType: "partner" });
+    expect(sendMail.mock.calls[0][0].text).toContain(
+      ["    Sunday, October 27", "    11:00 AM to 11:45 AM (Eastern time)", "    Session: Partner training", ""].join("\n"),
     );
   });
 

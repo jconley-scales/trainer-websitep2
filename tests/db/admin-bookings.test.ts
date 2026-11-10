@@ -101,7 +101,7 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     const time = freeTime(45);
     const { data, error } = await trainer.db
       .from("booking_requests")
-      .insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin" })
+      .insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin", session_type: "one-on-one" })
       .select("status, source, email");
 
     expect(error).toBeNull();
@@ -110,7 +110,7 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
 
   it("shows an admin booking's whole time, start to end, as taken on the public calendar", async () => {
     const time = freeTime(45);
-    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin" });
+    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin", session_type: "one-on-one" });
     const start = Date.parse(time.starts_at);
     const end = Date.parse(time.ends_at);
 
@@ -119,7 +119,7 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
 
   it("includes a booking that starts before the window but runs into it", async () => {
     const time = freeTime(45);
-    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin" });
+    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...time, status: "confirmed", source: "admin", session_type: "one-on-one" });
     const start = Date.parse(time.starts_at);
     const end = Date.parse(time.ends_at);
 
@@ -165,10 +165,10 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
   it("does not let a signed-in non-admin add an admin booking, or read any booking", async () => {
     const { error } = await member.db
       .from("booking_requests")
-      .insert({ name: `Pat ${MARK}`, ...freeTime(), status: "confirmed", source: "admin" });
+      .insert({ name: `Pat ${MARK}`, ...freeTime(), status: "confirmed", source: "admin", session_type: "one-on-one" });
     expect(error?.code).toBe("42501");
 
-    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...freeTime(), status: "confirmed", source: "admin" });
+    await trainer.db.from("booking_requests").insert({ name: `Pat ${MARK}`, ...freeTime(), status: "confirmed", source: "admin", session_type: "one-on-one" });
     const { data: memberRows } = await member.db.from("booking_requests").select("id").like("name", `%${MARK}%`);
     const { data: anonRows } = await anon.from("booking_requests").select("id").like("name", `%${MARK}%`);
     expect(memberRows ?? []).toEqual([]);
@@ -180,7 +180,7 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     for (let i = 0; i < 4; i++) {
       const { error } = await trainer.db
         .from("booking_requests")
-        .insert({ name: `Pat ${MARK}`, email: who, ...freeTime(), status: "confirmed", source: "admin" });
+        .insert({ name: `Pat ${MARK}`, email: who, ...freeTime(), status: "confirmed", source: "admin", session_type: "one-on-one" });
       expect(error).toBeNull();
     }
 
@@ -192,13 +192,44 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     expect(fourth?.code).toBe("PF001");
   });
 
+  it("requires a known session type on every new booking, from the trainer or even the service role", async () => {
+    const admin = { name: `Pat ${MARK}`, status: "confirmed", source: "admin" };
+    const none = await trainer.db.from("booking_requests").insert({ ...admin, ...freeTime() });
+    const unknown = await trainer.db.from("booking_requests").insert({ ...admin, ...freeTime(), session_type: "group" });
+    const privileged = await service.from("booking_requests").insert({ ...admin, ...freeTime() });
+
+    expect(none.error?.code).toBe("23514");
+    expect(unknown.error?.code).toBe("23514");
+    expect(privileged.error?.code).toBe("23514");
+
+    const partner = await trainer.db
+      .from("booking_requests")
+      .insert({ ...admin, ...freeTime(), session_type: "partner" })
+      .select("session_type");
+    expect(partner.error).toBeNull();
+    expect(partner.data).toEqual([{ session_type: "partner" }]);
+  });
+
+  it("does not let the trainer or a visitor backdate a new booking to skip the session type", async () => {
+    const backdated = { created_at: "2025-01-01T00:00:00Z" };
+    const fromTrainer = await trainer.db
+      .from("booking_requests")
+      .insert({ name: `Pat ${MARK}`, ...freeTime(), status: "confirmed", source: "admin", ...backdated });
+    const fromVisitor = await anon
+      .from("booking_requests")
+      .insert({ name: `Pat ${MARK}`, email: clientEmail("old"), ...freeTime(), session_type: "partner", ...backdated });
+
+    expect(fromTrainer.error?.code).toBe("42501");
+    expect(fromVisitor.error?.code).toBe("42501");
+  });
+
   it("blocks an admin booking at the exact start time of a live booking", async () => {
     const time = freeTime();
     await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: clientEmail("first"), ...time, session_type: "one-on-one" });
 
     const { error } = await trainer.db
       .from("booking_requests")
-      .insert({ name: `Sam ${MARK}`, ...time, status: "confirmed", source: "admin" });
+      .insert({ name: `Sam ${MARK}`, ...time, status: "confirmed", source: "admin", session_type: "one-on-one" });
 
     expect(error?.code).toBe("23505");
   });
@@ -229,7 +260,7 @@ describe.skipIf(!running)("editing bookings (local Supabase)", () => {
   async function websiteBooking(extra: Record<string, unknown> = {}, time = freeTime()) {
     const { data, error } = await service
       .from("booking_requests")
-      .insert({ name: `Jordan ${MARK}`, email: clientEmail("jordan"), ...time, ...extra })
+      .insert({ name: `Jordan ${MARK}`, email: clientEmail("jordan"), ...time, session_type: "one-on-one", ...extra })
       .select("id")
       .single();
     if (error || !data) throw error ?? new Error("no row");
@@ -239,7 +270,7 @@ describe.skipIf(!running)("editing bookings (local Supabase)", () => {
   async function row(id: string) {
     const { data } = await service
       .from("booking_requests")
-      .select("name, email, phone, note, starts_at, ends_at, status, source, updated_at")
+      .select("name, email, phone, note, starts_at, ends_at, status, source, updated_at, session_type")
       .eq("id", id)
       .single();
     return data!;
@@ -268,6 +299,54 @@ describe.skipIf(!running)("editing bookings (local Supabase)", () => {
     expect(after).toMatchObject({ phone: "555 010 2030", note: "Bad left knee.", source: "website" });
     expect(Date.parse(after.starts_at)).toBe(Date.parse(moved.starts_at));
     expect(after.updated_at).not.toBeNull();
+  });
+
+  it("lets the trainer change only a booking's session type, which marks it edited", async () => {
+    const id = await websiteBooking();
+
+    const { error } = await trainer.db.from("booking_requests").update({ session_type: "virtual-partner" }).eq("id", id);
+
+    expect(error).toBeNull();
+    const after = await row(id);
+    expect(after.session_type).toBe("virtual-partner");
+    expect(after.updated_at).not.toBeNull();
+  });
+
+  it("does not let a booking's session type be cleared or set to an unknown one", async () => {
+    const id = await websiteBooking();
+    const cleared = await trainer.db.from("booking_requests").update({ session_type: null }).eq("id", id);
+    const unknown = await trainer.db.from("booking_requests").update({ session_type: "group" }).eq("id", id);
+
+    expect(cleared.error?.code).toBe("23514");
+    expect(unknown.error?.code).toBe("23514");
+    expect(await row(id)).toMatchObject({ session_type: "one-on-one", updated_at: null });
+  });
+
+  it("lets a booking from before session types stay without one when edited, or be given one that then stays", async () => {
+    const id = await websiteBooking({ session_type: null, created_at: "2025-06-01T00:00:00Z" });
+
+    const edit = await trainer.db.from("booking_requests").update({ note: "Bad left knee." }).eq("id", id);
+    expect(edit.error).toBeNull();
+    expect(await row(id)).toMatchObject({ note: "Bad left knee.", session_type: null });
+
+    const given = await trainer.db.from("booking_requests").update({ session_type: "partner" }).eq("id", id);
+    expect(given.error).toBeNull();
+    expect((await row(id)).session_type).toBe("partner");
+
+    const cleared = await trainer.db.from("booking_requests").update({ session_type: null }).eq("id", id);
+    expect(cleared.error?.code).toBe("23514");
+    expect((await row(id)).session_type).toBe("partner");
+  });
+
+  it("does not let a signed-in non-admin or a visitor change a booking's session type", async () => {
+    const id = await websiteBooking();
+
+    const fromMember = await member.db.from("booking_requests").update({ session_type: "partner" }).eq("id", id).select("id");
+    const fromVisitor = await anon.from("booking_requests").update({ session_type: "partner" }).eq("id", id).select("id");
+
+    expect(fromMember.data ?? []).toEqual([]);
+    expect(fromVisitor.error?.code ?? "none").not.toBe("none");
+    expect((await row(id)).session_type).toBe("one-on-one");
   });
 
   it("does not mark a booking edited when only its status changes", async () => {
@@ -335,6 +414,8 @@ describe.skipIf(!running)("editing bookings (local Supabase)", () => {
     const cancelled = await websiteBooking({ status: "cancelled" });
     const edit = await trainer.db.from("booking_requests").update({ note: "changed" }).eq("id", cancelled);
     expect(edit.error?.code).toBe("PF002");
+    const retype = await trainer.db.from("booking_requests").update({ session_type: "partner" }).eq("id", cancelled);
+    expect(retype.error?.code).toBe("PF002");
 
     const reopen = await trainer.db.from("booking_requests").update({ status: "new" }).eq("id", cancelled);
     expect(reopen.error).toBeNull();
@@ -346,6 +427,8 @@ describe.skipIf(!running)("editing bookings (local Supabase)", () => {
     });
     const pastEdit = await trainer.db.from("booking_requests").update({ note: "changed" }).eq("id", past);
     expect(pastEdit.error?.code).toBe("PF002");
-    expect((await row(past)).note).toBeNull();
+    const pastRetype = await trainer.db.from("booking_requests").update({ session_type: "partner" }).eq("id", past);
+    expect(pastRetype.error?.code).toBe("PF002");
+    expect(await row(past)).toMatchObject({ note: null, session_type: "one-on-one" });
   });
 });

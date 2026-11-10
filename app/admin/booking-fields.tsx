@@ -1,6 +1,7 @@
 "use client";
 
 import { DISPLAY_TIME_ZONE } from "@/lib/format";
+import { SESSION_TYPES } from "@/lib/session-types";
 import type { AddBookingInput } from "./actions";
 import {
   BOOKING_EMAIL_MAX,
@@ -39,8 +40,8 @@ export type BookingFormFields = Omit<AddBookingInput, "allowOverlap">;
 
 /**
  * The booking form's fields, shared by "Add a booking" and editing a booking:
- * name, date, start time (any quarter hour), length, email, phone and note.
- * The caller owns the values and the form around them.
+ * name, session type, date, start time (any quarter hour), length, email,
+ * phone and note. The caller owns the values and the form around them.
  */
 export function BookingFields({
   idPrefix,
@@ -48,6 +49,7 @@ export function BookingFields({
   set,
   emailRequired,
   emailHint,
+  sessionTypeOptional = false,
 }: {
   /** Unique per form, so labels match their inputs. */
   idPrefix: string;
@@ -56,8 +58,15 @@ export function BookingFields({
   /** True for a website booking, which must keep an email; the label then drops "(optional)". */
   emailRequired: boolean;
   emailHint?: string;
+  /**
+   * True only when editing a booking made before session types were recorded:
+   * none is chosen to start with, and the trainer may save without choosing.
+   */
+  sessionTypeOptional?: boolean;
 }) {
   const fieldId = (name: string) => `${idPrefix}-${name}`;
+  // Only while nothing is chosen: once the trainer picks one, it no longer applies.
+  const notRecorded = sessionTypeOptional && fields.sessionType === null;
   return (
     <>
       <div className="field">
@@ -72,6 +81,33 @@ export function BookingFields({
           onChange={(e) => set("name", e.target.value)}
         />
       </div>
+
+      <fieldset
+        className="session-type session-type--admin"
+        aria-describedby={notRecorded ? fieldId("session-type-hint") : undefined}
+      >
+        <legend className="session-type-legend">Session type</legend>
+        {notRecorded ? (
+          <p id={fieldId("session-type-hint")} className="field-hint">
+            Not recorded for this booking. Choose one if you know it.
+          </p>
+        ) : null}
+        <div className="session-type-options">
+          {SESSION_TYPES.map((type) => (
+            <label key={type.id} className="session-type-option">
+              <input
+                type="radio"
+                name={fieldId("session-type")}
+                value={type.id}
+                required={!sessionTypeOptional}
+                checked={fields.sessionType === type.id}
+                onChange={() => set("sessionType", type.id)}
+              />
+              <span className="session-type-title">{type.title}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <div className="add-booking-when">
         <div className="field">

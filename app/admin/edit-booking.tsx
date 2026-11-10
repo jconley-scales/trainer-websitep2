@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { gymTimeToUtc, utcToGymTime } from "@/lib/booking-availability";
 import { firstName, formatDayMonthTime } from "@/lib/format";
+import type { SessionType } from "@/lib/session-types";
 import { editBooking } from "./actions";
 import { BookingFields, type BookingFormFields } from "./booking-fields";
 import { NO_EMAIL } from "./copy";
@@ -18,6 +19,8 @@ export type EditableBookingData = {
   ends_at: string;
   status: "new" | "confirmed" | "cancelled";
   source: "website" | "admin";
+  /** Null for a booking made before session types were recorded. */
+  session_type: SessionType | null;
 };
 
 /** Which booking card is in edit mode: only one at a time. */
@@ -45,6 +48,7 @@ function fieldsFrom(b: EditableBookingData): BookingFormFields {
     date,
     time,
     minutes: minutesOf(b),
+    sessionType: b.session_type,
   };
 }
 
@@ -219,6 +223,7 @@ export function EditableBooking({
         fields={fields}
         set={set}
         emailRequired={booking.source === "website"}
+        sessionTypeOptional={booking.session_type === null}
       />
 
       {moved ? (
