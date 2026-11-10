@@ -840,12 +840,14 @@ test.describe("/admin confirm and cancel panels", () => {
     await expectNoSeriousViolations(page, "/admin (confirm panel)");
 
     // Tab walks the panel's own controls in order, each 48px with a focus ring.
-    const expected = ["Note for Jordan (optional)", "Yes, confirm and email Jordan", "Not yet"];
+    const expected = ["Don't email the client", "Note for Jordan (optional)", "Yes, confirm and email Jordan", "Not yet"];
     for (const name of expected) {
       await page.keyboard.press("Tab");
       const stop = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
-        const rect = el.getBoundingClientRect();
+        // A checkbox's tap target is its row: the box and its 48px label together.
+        const target = (el as HTMLInputElement).type === "checkbox" ? (el.closest(".check-field") ?? el) : el;
+        const rect = target.getBoundingClientRect();
         const style = getComputedStyle(el);
         return {
           label: (el as HTMLTextAreaElement).labels?.[0]?.textContent ?? el.textContent ?? "",
@@ -900,12 +902,19 @@ test.describe("/admin confirm and cancel panels", () => {
 
     await expectNoSeriousViolations(page, "/admin (cancel panel)");
 
-    const expected = ["Reason (optional, included in the email)", "Yes, cancel and email Jordan", "Keep booking"];
+    const expected = [
+      "Don't email the client",
+      "Reason (optional, included in the email)",
+      "Yes, cancel and email Jordan",
+      "Keep booking",
+    ];
     for (const name of expected) {
       await page.keyboard.press("Tab");
       const stop = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
-        const rect = el.getBoundingClientRect();
+        // A checkbox's tap target is its row: the box and its 48px label together.
+        const target = (el as HTMLInputElement).type === "checkbox" ? (el.closest(".check-field") ?? el) : el;
+        const rect = target.getBoundingClientRect();
         const style = getComputedStyle(el);
         return {
           label: (el as HTMLTextAreaElement).labels?.[0]?.textContent ?? el.textContent ?? "",
@@ -1052,7 +1061,7 @@ test.describe("/admin confirm and cancel panels", () => {
 
     // With no email on file, cancelling says so instead of offering to email.
     await card.getByRole("button", { name: /^Cancel the booking for Pat/ }).click();
-    await expect(card.getByRole("form")).toContainText("There's no email for Pat, so please let them know yourself.");
+    await expect(card.getByRole("form")).toContainText("No email on file — let them know yourself.");
     await card.getByRole("button", { name: "Yes, cancel" }).click();
     await expect(card.locator(".status-badge")).toHaveText("Cancelled");
   });
