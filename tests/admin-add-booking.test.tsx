@@ -142,7 +142,10 @@ describe("adding a booking from /admin", () => {
 
     const warning = await within(form).findByRole("alert");
     expect(warning).toHaveTextContent("This overlaps Sam's 9:30 AM session.");
-    fireEvent.click(within(form).getByRole("button", { name: "Save anyway" }));
+    // The warning can render a moment before the first save stops pending; wait, as a person would.
+    const saveAnyway = within(form).getByRole("button", { name: "Save anyway" });
+    await waitFor(() => expect(saveAnyway).toBeEnabled());
+    fireEvent.click(saveAnyway);
 
     expect(await screen.findByRole("status")).toHaveTextContent("Added Jane's session");
     expect(addBooking).toHaveBeenLastCalledWith({ ...PHONE_BOOKING, allowOverlap: true });

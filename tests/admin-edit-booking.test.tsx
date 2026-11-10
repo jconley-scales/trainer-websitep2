@@ -281,7 +281,10 @@ describe("editing a booking from /admin", () => {
       "This overlaps Sam's 9:30 AM session. You can choose another time, or save it anyway.",
     );
     vi.mocked(editBooking).mockResolvedValue({ ok: true, moved: true, confirmed: false, emailed: true });
-    fireEvent.click(within(form).getByRole("button", { name: "Save anyway" }));
+    // The warning can render a moment before the first save stops pending; wait, as a person would.
+    const saveAnyway = within(form).getByRole("button", { name: "Save anyway" });
+    await waitFor(() => expect(saveAnyway).toBeEnabled());
+    fireEvent.click(saveAnyway);
 
     await card("Jordan Tester").findByRole("status");
     expect(editBooking).toHaveBeenLastCalledWith({ ...JORDAN_FIELDS, time: "09:15", skipEmail: false, allowOverlap: true });
