@@ -950,7 +950,7 @@ test.describe("/admin confirm and cancel panels", () => {
     await expectNoSeriousViolations(page, "/admin (after cancelling)");
   });
 
-  test("resend confirmation: only once confirmed; 48px, visible focus, the result is announced; axe", async ({ page, request }) => {
+  test("resend confirmation: only once confirmed; a panel with a new note; axe, keyboard, 48px targets, focus", async ({ page, request }) => {
     await signInAsAdminWithBooking(page, request);
     const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
     const resend = card.getByRole("button", { name: /^Resend confirmation for Jordan Tester/ });
@@ -965,6 +965,38 @@ test.describe("/admin confirm and cancel panels", () => {
     await expect(card.locator(".notice-message")).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(resend).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    const panel = card.getByRole("form", { name: /^Resend Jordan's confirmation for .+ at .+\?$/ });
+    await expect(panel).toContainText("Any note you sent before wasn't saved");
+    await expect(panel.locator(".confirm-panel-question")).toBeFocused();
+    await expect(panel.getByRole("checkbox")).toHaveCount(0);
+    await expectNoSeriousViolations(page, "/admin (resend panel)");
+
+    // Tab walks the panel's own controls in order, each 48px with a focus ring.
+    for (const name of ["Note for Jordan (optional)", "Yes, resend to Jordan", "Not now"]) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return {
+          label: (el as HTMLTextAreaElement).labels?.[0]?.textContent ?? el.textContent ?? "",
+          width: rect.width,
+          height: rect.height,
+          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
+        };
+      });
+      expect(stop.label.trim()).toBe(name);
+      expect(stop.height, `${name} height`).toBeGreaterThanOrEqual(48);
+      expect(stop.width, `${name} width`).toBeGreaterThanOrEqual(48);
+      expect(stop.outline, `${name} focus ring`).toBe(true);
+    }
+
+    // "Not now" closes it and returns focus to Resend, which is 48px with a focus ring too.
+    await page.keyboard.press("Enter");
+    await expect(panel).toBeHidden();
+    await expect(resend).toBeFocused();
     const target = await resend.evaluate((el) => {
       const rect = el.getBoundingClientRect();
       const style = getComputedStyle(el);
@@ -978,7 +1010,9 @@ test.describe("/admin confirm and cancel panels", () => {
     expect(target.width, "Resend confirmation width").toBeGreaterThanOrEqual(48);
     expect(target.outline, "Resend confirmation focus ring").toBe(true);
 
-    await page.keyboard.press("Enter");
+    await resend.click();
+    await panel.getByLabel("Note for Jordan (optional)").fill("Video link: https://meet.example.com/jordan");
+    await panel.getByRole("button", { name: "Yes, resend to Jordan" }).click();
     // Sent (local mail viewer) or, if mail is not set up, the plain failure: either is announced.
     const result = card.locator(".notice-message, .error-message");
     await expect(result).toHaveText(

@@ -868,8 +868,8 @@ describe("resendConfirmation", () => {
     db.result = { data: [CONFIRMED], error: null };
   });
 
-  it("sends the Confirmed email again, as it was, for a confirmed future booking", async () => {
-    const result = await resendConfirmation(ID);
+  it("sends the Confirmed email again for a confirmed future booking, with the trainer's new note", async () => {
+    const result = await resendConfirmation(ID, "  Video link: https://meet.example.com/jordan  ");
 
     expect(result).toEqual({ ok: true, sentTo: "jordan@example.com" });
     expect(sendBookingConfirmation).toHaveBeenCalledTimes(1);
@@ -878,21 +878,38 @@ describe("resendConfirmation", () => {
       email: "jordan@example.com",
       startsAt: "2030-10-25T13:00:00Z",
       endsAt: "2030-10-25T14:00:00Z",
-      note: "",
+      note: "Video link: https://meet.example.com/jordan",
       sessionType: "partner",
     });
   });
 
+  it("never stores the note: nothing is written", async () => {
+    await resendConfirmation(ID, "Video link: https://meet.example.com/jordan");
+    expect(db.calls.filter(([m]) => m === "update" || m === "insert")).toEqual([]);
+  });
+
+  it("rejects a note over 500 characters, reading and sending nothing", async () => {
+    const result = await resendConfirmation(ID, "x".repeat(501));
+    expect(result).toEqual({ ok: false, error: "Please shorten the note to 500 characters or fewer." });
+    expect(db.calls).toEqual([]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("rejects a note that is not text (posted by hand)", async () => {
+    expect(await resendConfirmation(ID, 42 as unknown as string)).toMatchObject({ ok: false });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
   it("re-checks the session, reading and sending nothing when signed out", async () => {
     db.user = null;
-    await expect(resendConfirmation(ID)).rejects.toThrow("NEXT_REDIRECT");
+    await expect(resendConfirmation(ID, "")).rejects.toThrow("NEXT_REDIRECT");
     expect(db.calls).toEqual([]);
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
   });
 
   it("only resends for a confirmed booking: a new or cancelled one (or one a non-admin can't see) sends nothing", async () => {
     db.result = { data: [], error: null };
-    const result = await resendConfirmation(ID);
+    const result = await resendConfirmation(ID, "");
     expect(result).toEqual({
       ok: false,
       error: "This booking isn't confirmed any more, so there's nothing to resend. Please refresh the page.",
@@ -906,7 +923,7 @@ describe("resendConfirmation", () => {
       data: [{ ...CONFIRMED, starts_at: new Date(Date.now() - 60_000).toISOString() }],
       error: null,
     };
-    const result = await resendConfirmation(ID);
+    const result = await resendConfirmation(ID, "");
     expect(result).toEqual({
       ok: false,
       error: "This session has already started, so there's no need to resend its confirmation.",
@@ -916,7 +933,7 @@ describe("resendConfirmation", () => {
 
   it("refuses a booking with no email on file (added by the trainer), sending nothing", async () => {
     db.result = { data: [{ ...CONFIRMED, email: null }], error: null };
-    const result = await resendConfirmation(ID);
+    const result = await resendConfirmation(ID, "");
     expect(result).toEqual({
       ok: false,
       error: "This booking has no email address. Add one with Edit, or let them know yourself.",
@@ -928,7 +945,7 @@ describe("resendConfirmation", () => {
     sendBookingConfirmation.mockRejectedValue(new Error("SMTP down"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const result = await resendConfirmation(ID);
+    const result = await resendConfirmation(ID, "");
 
     expect(result).toEqual({
       ok: false,
@@ -938,15 +955,15 @@ describe("resendConfirmation", () => {
   });
 
   it("rejects a bad id (posted by hand) without reading or sending anything", async () => {
-    expect(await resendConfirmation("not-a-uuid")).toMatchObject({ ok: false });
-    expect(await resendConfirmation(42 as unknown as string)).toMatchObject({ ok: false });
+    expect(await resendConfirmation("not-a-uuid", "")).toMatchObject({ ok: false });
+    expect(await resendConfirmation(42 as unknown as string, "")).toMatchObject({ ok: false });
     expect(db.calls).toEqual([]);
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
   });
 
   it("asks the trainer to try again when the booking can't be read, sending nothing", async () => {
     db.result = { data: null, error: { code: "08006" } };
-    const result = await resendConfirmation(ID);
+    const result = await resendConfirmation(ID, "");
     expect(result).toEqual({ ok: false, error: "Sorry, that did not send. Please try again." });
     expect(sendBookingConfirmation).not.toHaveBeenCalled();
   });

@@ -136,8 +136,9 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   default); `confirmBooking`/`cancelBooking` skip the email only for
   `skipEmail === true`, and also return `emailed: null`.
 - "Resend confirmation" (`resendConfirmation`) sends a confirmed, not-yet-started
-  booking's Confirmed email again, without the original note (never stored).
-  It writes nothing; a booking with no email, or a mail failure, comes back as
+  booking's Confirmed email again. The original note was never stored, so its
+  panel offers a new one (say, a virtual session's video link), also not
+  stored. It writes nothing; a booking with no email, or a mail failure, comes back as
   `ok: false`. On success /admin names the address it went to.
 
 ## Conventions

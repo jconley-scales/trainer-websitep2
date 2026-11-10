@@ -18,41 +18,67 @@ const ACTIONS: Record<Status, { to: Status; label: string; className: string }[]
 };
 
 /**
- * Confirming and cancelling email the client by default, so each asks first in
- * a panel, which also offers "Don't email the client" (unticked by default).
+ * Confirming, cancelling and resending the confirmation email the client, so
+ * each asks first in a panel. Confirming and cancelling also offer "Don't
+ * email the client" (unticked by default); resending is only an email.
  */
-type PanelKind = "confirmed" | "cancelled";
+type PanelKind = "confirmed" | "cancelled" | "resend";
+
+/** What happened after confirming, cancelling or resending, shown under the buttons. */
+type Outcome = { kind: "done" | "not-emailed"; text: string };
+
+/** What submitting a panel did: an error to show in it, or the outcome to announce. */
+type PanelResult = { ok: false; error: string } | { ok: true; outcome: Outcome };
 
 /** What each panel says and does. `name` is the client's first name; `when` the day and time. */
-const PANELS: Record<
-  PanelKind,
-  {
-    question: (name: string, when: string) => string;
-    lead: string;
-    fieldLabel: (name: string) => string;
-    fieldHint?: string;
-    max: number;
-    submitLabel: (name: string) => string;
-    /** The submit button when nobody will be emailed. */
-    noEmailSubmitLabel: string;
-    submitClassName: string;
-    backLabel: string;
-    done: string;
-    send: typeof confirmBooking;
-  }
-> = {
+type Panel = {
+  question: (name: string, when: string) => string;
+  lead: string;
+  fieldLabel: (name: string) => string;
+  fieldHint?: string;
+  max: number;
+  submitLabel: (name: string) => string;
+  /** The submit button when nobody will be emailed. */
+  noEmailSubmitLabel: string;
+  submitClassName: string;
+  backLabel: string;
+  /** Whether it offers "Don't email the client". */
+  skippable: boolean;
+  run: (id: string, text: string, skipped: boolean, name: string) => Promise<PanelResult>;
+};
+
+/** Confirm or cancel (`send`), then say whether the client was emailed. `done` is e.g. "Confirmed". */
+function changeStatus(send: typeof confirmBooking, done: string): Panel["run"] {
+  return async (id, text, skipped, name) => {
+    const result = await send(id, text, skipped);
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      outcome:
+        result.emailed === null
+          ? { kind: "done", text: `${done}. ${skipped ? `${name} has not been emailed.` : NO_EMAIL}` }
+          : result.emailed
+          ? { kind: "done", text: `${done}. ${name} has been emailed.` }
+          : { kind: "not-emailed", text: `${done}, but the email to ${name} didn't send. Please call or email them yourself.` },
+    };
+  };
+}
+
+const NOTE_HINT = `Goes in the email only, and is not saved. For example, where to meet. Up to ${CONFIRM_NOTE_MAX} characters.`;
+
+const PANELS: Record<PanelKind, Panel> = {
   confirmed: {
     question: (name, when) => `Confirm ${name}'s booking on ${when}?`,
     lead: "They'll get a confirmation email.",
     fieldLabel: (name) => `Note for ${name} (optional)`,
-    fieldHint: `Goes in the email only, and is not saved. For example, where to meet. Up to ${CONFIRM_NOTE_MAX} characters.`,
+    fieldHint: NOTE_HINT,
     max: CONFIRM_NOTE_MAX,
     submitLabel: (name) => `Yes, confirm and email ${name}`,
     noEmailSubmitLabel: "Yes, confirm",
     submitClassName: "button button--accent",
     backLabel: "Not yet",
-    done: "Confirmed",
-    send: confirmBooking,
+    skippable: true,
+    run: changeStatus(confirmBooking, "Confirmed"),
   },
   cancelled: {
     question: (name, when) => `Cancel ${name}'s booking on ${when}?`,
@@ -64,13 +90,28 @@ const PANELS: Record<
     noEmailSubmitLabel: "Yes, cancel",
     submitClassName: "button button-danger",
     backLabel: "Keep booking",
-    done: "Cancelled",
-    send: cancelBooking,
+    skippable: true,
+    run: changeStatus(cancelBooking, "Cancelled"),
+  },
+  resend: {
+    question: (name, when) => `Resend ${name}'s confirmation for ${when}?`,
+    lead: "They'll get the confirmation email again. Any note you sent before wasn't saved, so add anything they still need, like a video link.",
+    fieldLabel: (name) => `Note for ${name} (optional)`,
+    fieldHint: NOTE_HINT,
+    max: CONFIRM_NOTE_MAX,
+    submitLabel: (name) => `Yes, resend to ${name}`,
+    // Only offered for a booking with an email, so never shown.
+    noEmailSubmitLabel: "Yes, resend",
+    submitClassName: "button button--accent",
+    backLabel: "Not now",
+    skippable: false,
+    run: async (id, text) => {
+      const result = await resendConfirmation(id, text);
+      if (!result.ok) return result;
+      return { ok: true, outcome: { kind: "done", text: `Confirmation sent again to ${result.sentTo}.` } };
+    },
   },
 };
-
-/** What happened after confirming, cancelling or resending, shown under the buttons. */
-type Outcome = { kind: "done" | "not-emailed"; text: string };
 
 export function BookingStatusButtons({
   id,
@@ -85,9 +126,9 @@ export function BookingStatusButtons({
   status: Status;
   /** e.g. "Jordan Tester on Friday, October 23", for button labels. */
   who: string;
-  /** e.g. "Jordan", for the confirm and cancel panels. */
+  /** e.g. "Jordan", for the panels. */
   clientFirstName: string;
-  /** e.g. "Friday, October 23 at 9:00 AM", for the confirm and cancel panels. */
+  /** e.g. "Friday, October 23 at 9:00 AM", for the panels. */
   when: string;
   /** False for an admin booking with no email: nobody is emailed, so the panels say so and ask for no note. */
   hasEmail?: boolean;
@@ -106,7 +147,7 @@ export function BookingStatusButtons({
   const checkboxId = useId();
   const hintId = useId();
   const questionRef = useRef<HTMLParagraphElement>(null);
-  const buttonRefs = useRef<Partial<Record<Status, HTMLButtonElement | null>>>({});
+  const buttonRefs = useRef<Partial<Record<Status | PanelKind, HTMLButtonElement | null>>>({});
   const outcomeRef = useRef<HTMLParagraphElement>(null);
 
   // Move focus into the panel when it opens, so a keyboard or screen reader user lands on the question.
@@ -119,33 +160,27 @@ export function BookingStatusButtons({
     if (outcome) outcomeRef.current?.focus();
   }, [outcome]);
 
-  function change(to: Status) {
+  function openPanel(kind: PanelKind) {
     setError(null);
     setOutcome(null);
+    if (open !== kind) {
+      setText("");
+      setSkipEmail(false);
+    }
+    setOpen(kind);
+  }
+
+  function change(to: Status) {
     if (to in PANELS) {
-      const kind = to as PanelKind;
-      if (open !== kind) {
-        setText("");
-        setSkipEmail(false);
-      }
-      setOpen(kind);
+      openPanel(to as PanelKind);
       return;
     }
+    setError(null);
+    setOutcome(null);
     // Reopening emails no one, so it acts straight away.
     startTransition(async () => {
       const result = await setBookingStatus(id, to);
       if (!result.ok) setError(result.error);
-    });
-  }
-
-  function resend() {
-    setOpen(null);
-    setError(null);
-    setOutcome(null);
-    startTransition(async () => {
-      const result = await resendConfirmation(id);
-      if (result.ok) setOutcome({ kind: "done", text: `Confirmation sent again to ${result.sentTo}.` });
-      else setError(result.error);
     });
   }
 
@@ -160,10 +195,10 @@ export function BookingStatusButtons({
     event.preventDefault();
     if (!open) return;
     const panel = PANELS[open];
-    const skipped = hasEmail && skipEmail;
+    const skipped = panel.skippable && hasEmail && skipEmail;
     setError(null);
     startTransition(async () => {
-      const result = await panel.send(id, skipped ? "" : text, skipped);
+      const result = await panel.run(id, skipped ? "" : text, skipped, clientFirstName);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -171,16 +206,7 @@ export function BookingStatusButtons({
       setOpen(null);
       setText("");
       setSkipEmail(false);
-      setOutcome(
-        result.emailed === null
-          ? { kind: "done", text: `${panel.done}. ${skipped ? `${clientFirstName} has not been emailed.` : NO_EMAIL}` }
-          : result.emailed
-          ? { kind: "done", text: `${panel.done}. ${clientFirstName} has been emailed.` }
-          : {
-              kind: "not-emailed",
-              text: `${panel.done}, but the email to ${clientFirstName} didn't send. Please call or email them yourself.`,
-            },
-      );
+      setOutcome(result.outcome);
     });
   }
 
@@ -208,7 +234,16 @@ export function BookingStatusButtons({
           </button>
         ))}
         {status === "confirmed" && canResend ? (
-          <button type="button" className="button button-secondary" disabled={pending} onClick={resend}>
+          <button
+            ref={(el) => {
+              buttonRefs.current.resend = el;
+            }}
+            type="button"
+            className="button button-secondary"
+            disabled={pending}
+            aria-expanded={open === "resend"}
+            onClick={() => openPanel("resend")}
+          >
             Resend confirmation
             <span className="visually-hidden"> for {who}</span>
           </button>
@@ -225,7 +260,7 @@ export function BookingStatusButtons({
               {!hasEmail ? NO_EMAIL : emailing ? panel.lead : `${clientFirstName} won't be emailed.`}
             </p>
           </div>
-          {hasEmail ? (
+          {hasEmail && panel.skippable ? (
             <div className="check-field">
               <input
                 id={checkboxId}

@@ -247,13 +247,18 @@ export async function cancelBooking(id: string, reason: string, skipEmail = fals
 }
 
 /**
- * Send a confirmed booking's Confirmed email again, as it was first sent but
- * without the original note (which was never stored): for a client who can't
- * find it, or after the trainer corrects their email. Writes nothing.
+ * Send a confirmed booking's Confirmed email again: for a client who can't
+ * find it, or after the trainer corrects their email. The first note was
+ * never stored, so the trainer may write a new one (say, the video link),
+ * which is not stored either. Writes nothing.
  */
-export async function resendConfirmation(id: string): Promise<ResendResult> {
-  if (typeof id !== "string" || !UUID.test(id)) {
+export async function resendConfirmation(id: string, note: string): Promise<ResendResult> {
+  if (typeof id !== "string" || !UUID.test(id) || typeof note !== "string") {
     return { ok: false, error: "That email could not be sent." };
+  }
+  const trimmedNote = note.trim();
+  if (trimmedNote.length > CONFIRM_NOTE_MAX) {
+    return { ok: false, error: `Please shorten the note to ${CONFIRM_NOTE_MAX} characters or fewer.` };
   }
   const supabase = await createClient();
   const {
@@ -287,7 +292,7 @@ export async function resendConfirmation(id: string): Promise<ResendResult> {
       email: booking.email,
       startsAt: booking.starts_at,
       endsAt: booking.ends_at,
-      note: "",
+      note: trimmedNote,
       sessionType: toSessionType(booking.session_type),
     });
   } catch (err) {
