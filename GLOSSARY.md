@@ -24,8 +24,16 @@ Where a booking came from: the website or the trainer (admin).
 _Avoid_: Origin, channel
 
 **Session type**:
-The kind of session a booking is for: 1-on-1 (the client alone) or Partner (the client and one other person, priced for both). Chosen by the visitor on the website; not recorded for older bookings.
+The kind of session a booking is for: 1-on-1 (the client alone) or Partner (the client and one other person, priced for both), each either in person or virtual. Chosen by the visitor on the website; not recorded for older bookings.
 _Avoid_: Service, pair
+
+**Virtual session**:
+A session held live over video rather than in person. Virtual sessions have their own schedule and prices, but share the trainer's time with in-person ones.
+_Avoid_: Online, remote, Zoom session
+
+**Break**:
+The 45 minutes the trainer needs between any two sessions, to travel or get ready. No slot is offered that would leave less.
+_Avoid_: Buffer, gap
 
 **Live booking**:
 A booking that has not been cancelled.

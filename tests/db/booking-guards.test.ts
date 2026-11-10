@@ -23,7 +23,7 @@ vi.mock("@/lib/notify", () => ({ notifyTrainerOfBooking }));
 vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
 
 import { getTakenTimes, submitBooking } from "@/app/(marketing)/book/actions";
-import { availableDays, overlapsTaken, type AvailableSlot } from "@/lib/booking-availability";
+import { availableDays, clashesWithTaken, type AvailableSlot } from "@/lib/booking-availability";
 import { SITE } from "@/lib/site";
 
 const admin = createClient(LOCAL_URL, LOCAL_SERVICE_KEY, { auth: { persistSession: false } });
@@ -41,9 +41,9 @@ const email = (who: string) => `${who}-${Date.now()}@${TEST_DOMAIN}`;
 /** Future slots nobody holds yet. */
 async function freeSlots(count: number): Promise<AvailableSlot[]> {
   const taken = await getTakenTimes();
-  const free = availableDays(new Date())
+  const free = availableDays(new Date(), "in-person")
     .flatMap((d) => d.slots)
-    .filter((s) => !overlapsTaken(s, taken));
+    .filter((s) => !clashesWithTaken(s, taken));
   if (free.length < count) throw new Error(`Need ${count} free slots, found ${free.length}`);
   return free.slice(0, count);
 }
@@ -62,7 +62,7 @@ function booking(slot: AvailableSlot, who: string, extra: { website?: string } =
 }
 
 async function isTaken(slot: AvailableSlot) {
-  return overlapsTaken(slot, await getTakenTimes());
+  return clashesWithTaken(slot, await getTakenTimes());
 }
 
 describe.skipIf(!running)("booking spam guards (local Supabase)", () => {

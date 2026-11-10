@@ -5,6 +5,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { availableDays } from "../../lib/booking-availability";
 import { formatDate, formatTimeRange } from "../../lib/format";
+import { sessionTypeFormat } from "../../lib/session-types";
 
 /**
  * End-to-end accessibility pass over every screen, for a 60+ audience.
@@ -409,12 +410,10 @@ test.describe("public page content and links", () => {
     expect(requests.filter((r) => r.url.includes("Pat") || r.url.includes("/contact?"))).toEqual([]);
   });
 
-  test("booking shows the price range and links to pricing", async ({ page }) => {
+  test("booking shows the lowest per-session price and links to pricing", async ({ page }) => {
     await page.goto("/book");
     const note = page.locator(".booking-price-note");
-    await expect(note).toContainText("$70");
-    await expect(note).toContainText("$85");
-    await expect(note).toContainText("$120");
+    await expect(note).toContainText("Sessions from $58.33 each, in person or virtual.");
     await expect(note.getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
   });
 
@@ -451,7 +450,12 @@ test.describe("public 404", () => {
   });
 });
 
-const SESSION_TYPE_LABEL = { "one-on-one": /^1-on-1 training/, partner: /^Partner training/ } as const;
+const SESSION_TYPE_LABEL = {
+  "one-on-one": /^1-on-1 training/,
+  partner: /^Partner training/,
+  "virtual-one-on-one": /^Virtual 1-on-1 training/,
+  "virtual-partner": /^Virtual partner training/,
+} as const;
 
 /** The "What kind of session" radio group at the top of /book. */
 const sessionTypeGroup = (page: Page) => page.getByRole("group", { name: "What kind of session would you like?" });
@@ -487,7 +491,7 @@ async function pickFirstTime(page: Page, type: keyof typeof SESSION_TYPE_LABEL =
   await time.click();
   await expect(page.getByRole("form", { name: "Your details" })).toBeVisible();
   const date = dayLabel.split(" — ")[0];
-  const slot = availableDays(new Date())
+  const slot = availableDays(new Date(), sessionTypeFormat(type))
     .flatMap((day) => day.slots)
     .find((s) => formatDate(s.startsAt) === date && formatTimeRange(s.startsAt, s.endsAt) === timeLabel);
   expect(slot, `slot for ${date}, ${timeLabel}`).toBeTruthy();
@@ -613,7 +617,7 @@ test.describe("/book (booking calendar)", () => {
     await openBookPage(page);
     const group = sessionTypeGroup(page);
     const radios = group.getByRole("radio");
-    await expect(radios).toHaveCount(2);
+    await expect(radios).toHaveCount(4);
     for (const radio of await radios.all()) await expect(radio).not.toBeChecked();
     await expect(group.getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
     // The calendar stays closed, and a hint says how to open it.
@@ -638,7 +642,7 @@ test.describe("/book (booking calendar)", () => {
     expect(groupBox.y + groupBox.height).toBeLessThanOrEqual(calendarBox.y);
   });
 
-  for (const type of ["one-on-one", "partner"] as const) {
+  for (const type of ["one-on-one", "partner", "virtual-one-on-one", "virtual-partner"] as const) {
     test(`choosing ${type} saves it with the request`, async ({ page, request }) => {
       const email = testEmail();
       await pickFirstTime(page, type);

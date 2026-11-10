@@ -5,7 +5,8 @@ import { SITE } from "@/lib/site";
 import { sectionClass, titleClass, type SectionProps } from "./types";
 
 /**
- * Session prices, one labelled group per kind of training (1-on-1, partner).
+ * Session prices, one labelled group per kind of training (1-on-1, partner,
+ * and the virtual versions of each).
  * The full list is short, so both variants show every package; "preview" adds
  * a link to the Pricing page and "full" adds the per-session cost.
  */

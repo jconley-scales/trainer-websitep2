@@ -3,14 +3,13 @@ import { BookingFlow } from "@/components/marketing/BookingFlow";
 import { formatUsd } from "@/lib/format";
 import { SITE } from "@/lib/site";
 
-/** Each training group's per-session range, e.g. "1-on-1 training $70 to $85 each". */
-const ranges = SITE.pricing.map((group) => {
-  const perSession = group.prices.map((p) => p.total / p.sessions);
-  const lowest = formatUsd(Math.min(...perSession));
-  const highest = formatUsd(Math.max(...perSession));
-  return `${group.title.toLowerCase()} ${lowest} to ${highest} each`;
-});
-const priceNote = ranges.join(", ").replace(/^./, (c) => c.toUpperCase());
+/**
+ * The lowest per-session price across every kind of training, e.g. "Sessions
+ * from $58.33 each". One figure, since four ranges made too long a sentence;
+ * the pricing page has the details.
+ */
+const lowest = Math.min(...SITE.pricing.flatMap((group) => group.prices.map((p) => p.total / p.sessions)));
+const priceNote = `Sessions from ${formatUsd(Math.round(lowest * 100) / 100)} each, in person or virtual`;
 
 export const metadata: Metadata = {
   title: "Book a session",

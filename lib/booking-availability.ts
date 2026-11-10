@@ -1,24 +1,31 @@
 import { DISPLAY_TIME_ZONE } from "@/lib/format";
+import type { SessionFormat } from "@/lib/session-types";
 
 /**
  * Availability for the public booking page.
  *
- * Bookable times are generated here from the trainer's weekly schedule, in the
+ * Bookable times are generated here from the trainer's weekly schedules, in the
  * gym's display time zone (see DISPLAY_TIME_ZONE in lib/format.ts). There is
- * one instructor, so each time takes one booking.
+ * one instructor, so each time takes one booking, and in-person and virtual
+ * sessions share the same trainer.
  *
- * Sessions are 1 hour, and start times are spaced 90 minutes apart so the
- * instructor always has a 30-minute break to travel to the next location:
- * - Thursday: 8:00 and 9:30
- * - Saturday and Sunday: 8:00, 9:30, 11:00, 12:30, 2:00 and 3:30 (open until 5pm)
+ * Sessions are 1 hour, and the trainer needs a 45-minute break between any two
+ * of them (to travel to the next home, or to get ready). Each schedule's start
+ * times are spaced to leave that break:
+ * - In person: Thursday 8:00 and 9:45; Saturday and Sunday 8:00, 9:45, 11:30,
+ *   1:15 and 3:00 (the last ends at 4:00)
+ * - Virtual: Saturday and Sunday 11:00, 12:45 and 2:30 (between 11 and 4)
+ * The two schedules overlap at weekends, so a booked session also hides every
+ * slot, of either kind, that would leave less than the break around it.
  *
  * Each slot's `startsAt`/`endsAt` are real UTC instants, so the time the client
  * picks is stored unambiguously; the labels are already in the gym's zone.
  */
 
 const SESSION_MINUTES = 60;
-/** Travel time between sessions, so the instructor can reach the next location. */
-const BREAK_MINUTES = 30;
+/** The trainer's break between sessions, to travel to the next one or get ready. */
+export const BREAK_MINUTES = 45;
+const BREAK_MS = BREAK_MINUTES * 60000;
 
 /** Session start times (gym zone, 24h), every SESSION_MINUTES + BREAK_MINUTES from `first`. */
 function startTimes(first: string, count: number): string[] {
@@ -30,10 +37,18 @@ function startTimes(first: string, count: number): string[] {
 }
 
 /** Start times by weekday (0 = Sunday … 6 = Saturday). Days not listed are closed. */
-const SCHEDULE: Partial<Record<number, string[]>> = {
-  4: startTimes("08:00", 2), // Thursday: 8:00, 9:30
-  6: startTimes("08:00", 6), // Saturday: 8:00 … 15:30 (ends 16:30)
-  0: startTimes("08:00", 6), // Sunday: same as Saturday
+type Schedule = Partial<Record<number, string[]>>;
+
+const SCHEDULES: Record<SessionFormat, Schedule> = {
+  "in-person": {
+    4: startTimes("08:00", 2), // Thursday: 8:00, 9:45
+    6: startTimes("08:00", 5), // Saturday: 8:00 … 15:00 (ends 16:00)
+    0: startTimes("08:00", 5), // Sunday: same as Saturday
+  },
+  virtual: {
+    6: startTimes("11:00", 3), // Saturday: 11:00, 12:45, 14:30 (ends 15:30)
+    0: startTimes("11:00", 3), // Sunday: same as Saturday
+  },
 };
 /** How many days ahead to offer. */
 const DAYS_AHEAD = 28;
@@ -147,9 +162,16 @@ function zonedParts(instant: Date): { weekday: number; year: number; month: numb
   };
 }
 
-/** How far ahead the booking page looks, for fetching which times are taken. */
+/**
+ * How far ahead the booking page looks, for fetching which times are taken.
+ * Widened by the break at each end, since a booking just outside the offered
+ * range can still be too close to a slot inside it.
+ */
 export function availabilityWindow(now: Date): { from: Date; to: Date } {
-  return { from: now, to: new Date(now.getTime() + (DAYS_AHEAD + 1) * 24 * 60 * 60 * 1000) };
+  return {
+    from: new Date(now.getTime() - BREAK_MS),
+    to: new Date(now.getTime() + (DAYS_AHEAD + 1) * 24 * 60 * 60 * 1000 + BREAK_MS),
+  };
 }
 
 /**
@@ -159,37 +181,42 @@ export function availabilityWindow(now: Date): { from: Date; to: Date } {
  */
 export type TakenTime = { start: number; end: number };
 
-/** True when the slot and the taken time share any moment (touching end to start is fine). */
-export function overlapsTaken(slot: AvailableSlot, taken: readonly TakenTime[]): boolean {
+/**
+ * True when the slot overlaps a taken time or leaves less than the trainer's
+ * break (BREAK_MINUTES) before or after it. Exactly the break is fine.
+ */
+export function clashesWithTaken(slot: AvailableSlot, taken: readonly TakenTime[]): boolean {
   const start = Date.parse(slot.startsAt);
   const end = Date.parse(slot.endsAt);
-  return taken.some((t) => start < t.end && end > t.start);
+  return taken.some((t) => start < t.end + BREAK_MS && end + BREAK_MS > t.start);
 }
 
 /**
- * Drop the slots that overlap a taken time, and any day left with no slots.
- * Overlap, not just the same start: the trainer can add a booking at any
- * quarter hour (an admin booking), which may cover part of a public slot.
+ * Drop the slots that clash with a taken time, and any day left with no slots.
+ * Not just the same start: the trainer can add a booking at any quarter hour
+ * (an admin booking), and in-person and virtual slots interleave at weekends,
+ * so a booking can cover part of a slot or sit too close to it.
  */
 export function withoutTaken(days: AvailableDay[], taken: readonly TakenTime[]): AvailableDay[] {
   return days
     .map((day) => ({
       ...day,
-      slots: day.slots.filter((slot) => !overlapsTaken(slot, taken)),
+      slots: day.slots.filter((slot) => !clashesWithTaken(slot, taken)),
     }))
     .filter((day) => day.slots.length > 0);
 }
 
 /**
- * The available days (with their slots) from `now` forward, future-only.
- * Pure given `now`, so it is deterministic and easy to test.
+ * The available days (with their slots) for in-person or virtual sessions,
+ * from `now` forward, future-only. Pure given `now`, so it is deterministic
+ * and easy to test.
  */
-export function availableDays(now: Date): AvailableDay[] {
+export function availableDays(now: Date, format: SessionFormat): AvailableDay[] {
   const days: AvailableDay[] = [];
   for (let offset = 0; offset <= DAYS_AHEAD; offset++) {
     const dayInstant = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
     const { weekday, year, month, day, date } = zonedParts(dayInstant);
-    const times = SCHEDULE[weekday];
+    const times = SCHEDULES[format][weekday];
     if (!times) continue;
 
     const slots: AvailableSlot[] = [];
