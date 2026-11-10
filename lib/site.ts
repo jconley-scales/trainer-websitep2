@@ -11,13 +11,13 @@ export const SITE = {
   description:
     "Personal training for older adults in Chittenden County, Vermont, with Jervaughn Scales, an ACE-certified personal trainer and senior fitness specialist.",
   credentials: "ACE-Certified Personal Trainer & Senior Fitness Specialist · Former pro basketball player",
-  location: "Chittenden County, Vermont, in the comfort of your own home",
+  location: "Chittenden County, Vermont, in the comfort of your own home, or virtually from anywhere",
   /** The first paragraph doubles as the short "about me" on the home page. */
   about: [
     "I’m a certified personal trainer, and I help people of all ages reach their fitness goals, with a special focus on older adults. Whether you haven’t exercised in years, are coming back after an illness or injury, or simply want to stay strong and independent, we will start where you are and build from there.",
     "My approach is holistic. Every client gets a workout plan tailored to them, built around strength, flexibility and balance, with expert guidance on safe form in every session. We use weights, bands, ropes and whatever else suits you, and we adjust the plan as you get stronger.",
     "Before I coached others, I spent more than two decades as a professional athlete. I was born in New York City and grew up in Dayton, Ohio. I played college basketball for Southern University, where I was named Southwestern Athletic Conference Player of the Year, and then played professionally from 1994 to 2015, including 15 seasons in Argentina and two stints in Chile. Along the way I won a Chilean league title in 2004, the Argentine Liga Nacional in 2006 and the FIBA Americas League in 2008.",
-    "That career taught me how bodies get stronger, how they recover, and how much encouragement matters. Today I bring the same discipline to training clients across Chittenden County, Vermont, in the comfort of their own homes.",
+    "That career taught me how bodies get stronger, how they recover, and how much encouragement matters. Today I bring the same discipline to training clients across Chittenden County, Vermont, in the comfort of their own homes, and to clients anywhere through live virtual sessions.",
   ],
   philosophy:
     "It is never too late to get stronger. Whatever your age or starting point, you can feel steadier and more capable in daily life, and I will encourage you every step of the way.",
@@ -49,7 +49,7 @@ export const SITE = {
     {
       id: "one-on-one",
       title: "1-on-1 training",
-      intro: "Just you and your trainer.",
+      intro: "Just you and your trainer, in person.",
       prices: [
         { sessions: 1, total: 85 },
         { sessions: 5, total: 400 },
@@ -60,13 +60,35 @@ export const SITE = {
     {
       id: "partner",
       title: "Partner training",
-      intro: "Train with a partner. Prices cover both of you.",
+      intro: "Train with a partner, in person. Prices cover both of you.",
       firstSession: 85,
       prices: [
         { sessions: 1, total: 120 },
         { sessions: 5, total: 425 },
         { sessions: 10, total: 785 },
         { sessions: 15, total: 1125 },
+      ],
+    },
+    {
+      id: "virtual-one-on-one",
+      title: "Virtual 1-on-1 training",
+      intro: "Just you and your trainer, live over video.",
+      prices: [
+        { sessions: 1, total: 65 },
+        { sessions: 5, total: 300 },
+        { sessions: 10, total: 600 },
+        { sessions: 15, total: 875 },
+      ],
+    },
+    {
+      id: "virtual-partner",
+      title: "Virtual partner training",
+      intro: "Train with a partner, live over video. Prices cover both of you.",
+      prices: [
+        { sessions: 1, total: 100 },
+        { sessions: 5, total: 375 },
+        { sessions: 10, total: 700 },
+        { sessions: 15, total: 925 },
       ],
     },
   ] as {

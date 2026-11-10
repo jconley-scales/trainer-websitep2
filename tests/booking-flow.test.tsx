@@ -16,8 +16,10 @@ afterEach(() => {
 
 const ONE_ON_ONE = /^1-on-1 training/;
 const PARTNER = /^Partner training/;
+const VIRTUAL_ONE_ON_ONE = /^Virtual 1-on-1 training/;
+const VIRTUAL_PARTNER = /^Virtual partner training/;
 
-/** Chooses 1-on-1 or partner training. */
+/** Chooses a session type (1-on-1 training unless told otherwise). */
 async function chooseType(name: RegExp = ONE_ON_ONE) {
   fireEvent.click(await screen.findByRole("radio", { name }));
 }
@@ -104,16 +106,20 @@ describe("booking a session", () => {
 });
 
 describe("choosing a session type", () => {
-  it("asks first, with neither 1-on-1 nor partner chosen yet and the calendar still closed", async () => {
+  it("asks first, with no type chosen yet and the calendar still closed", async () => {
     render(<BookPage />);
     const group = await screen.findByRole("group", { name: /kind of session/i });
+    const radios = within(group).getAllByRole("radio");
     const oneOnOne = within(group).getByRole("radio", { name: ONE_ON_ONE });
-    const partner = within(group).getByRole("radio", { name: PARTNER });
 
-    expect(oneOnOne).toHaveAccessibleName("1-on-1 training Just you and your trainer.");
-    expect(partner).toHaveAccessibleName("Partner training Train with a partner. Prices cover both of you.");
-    expect(oneOnOne).not.toBeChecked();
-    expect(partner).not.toBeChecked();
+    expect(radios).toHaveLength(4);
+    expect(radios[0]).toHaveAccessibleName("1-on-1 training Just you and your trainer, in person.");
+    expect(radios[1]).toHaveAccessibleName("Partner training Train with a partner, in person. Prices cover both of you.");
+    expect(radios[2]).toHaveAccessibleName("Virtual 1-on-1 training Just you and your trainer, live over video.");
+    expect(radios[3]).toHaveAccessibleName(
+      "Virtual partner training Train with a partner, live over video. Prices cover both of you.",
+    );
+    for (const radio of radios) expect(radio).not.toBeChecked();
     expect(within(group).getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
     expect(group).not.toHaveTextContent("$");
 
@@ -124,7 +130,9 @@ describe("choosing a session type", () => {
     expect(oneOnOne).toHaveAccessibleDescription("Choose one and the calendar will open below.");
   });
 
-  it.each([[ONE_ON_ONE], [PARTNER]])("opens the calendar below once a type is chosen (%s)", async (name) => {
+  it.each([[ONE_ON_ONE], [PARTNER], [VIRTUAL_ONE_ON_ONE], [VIRTUAL_PARTNER]])(
+    "opens the calendar below once a type is chosen (%s)",
+    async (name) => {
     render(<BookPage />);
     await chooseType(name);
     const group = screen.getByRole("group", { name: /kind of session/i });
@@ -132,7 +140,8 @@ describe("choosing a session type", () => {
     expect(group.compareDocumentPosition(calendar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /available$/ }).length).toBeGreaterThan(0);
     expect(screen.queryByText("Choose one and the calendar will open below.")).toBeNull();
-  });
+    },
+  );
 
   it("keeps the picked time and details when the type is changed afterwards", async () => {
     render(<BookPage />);
@@ -147,9 +156,41 @@ describe("choosing a session type", () => {
     expect(submitBooking).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "partner" }));
   });
 
+  it("offers virtual sessions only at weekends, at 11:00, 12:45 and 2:30", async () => {
+    render(<BookPage />);
+    await chooseType(VIRTUAL_ONE_ON_ONE);
+    const days = screen.getAllByRole("button", { name: /available$/ });
+    for (const day of days) expect(day).toHaveAccessibleName(/^(Saturday|Sunday), /);
+    fireEvent.click(days[0]);
+    const times = [...document.querySelectorAll(".slot-row")].map((row) => row.textContent);
+    expect(times.length).toBeGreaterThan(0);
+    for (const time of times) expect(time).toMatch(/^(11:00 AM|12:45 PM|2:30 PM) to /);
+  });
+
+  it("says which kind of session is being booked", async () => {
+    render(<BookPage />);
+    await chooseType(VIRTUAL_PARTNER);
+    const time = await pickTimeOnly();
+    expect(document.querySelector(".booking-chosen")).toHaveTextContent("Booking virtual partner training on");
+    expect(document.querySelector(".booking-chosen")).toHaveTextContent(time);
+  });
+
+  it("drops a picked in-person time when switching to virtual, which never offers it", async () => {
+    render(<BookPage />);
+    // In-person times (8:00, 9:45, 11:30, 1:15, 3:00) are never virtual times.
+    await pickTime();
+    expect(document.querySelector(".booking-form")).not.toBeNull();
+
+    await chooseType(VIRTUAL_ONE_ON_ONE);
+    expect(document.querySelector(".booking-form")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /available$/ }).length).toBeGreaterThan(0);
+  });
+
   it.each([
     [ONE_ON_ONE, "one-on-one"],
     [PARTNER, "partner"],
+    [VIRTUAL_ONE_ON_ONE, "virtual-one-on-one"],
+    [VIRTUAL_PARTNER, "virtual-partner"],
   ] as const)("sends the chosen type with the request (%s)", async (name, id) => {
     render(<BookPage />);
     await chooseType(name);

@@ -117,11 +117,11 @@ describe("dedicated public pages", () => {
     expect(text).toMatch(/optional/i);
   });
 
-  it("booking shows the per-session price range and links to pricing", () => {
+  it("booking shows the lowest per-session price and links to pricing", () => {
     const doc = render(<BookPage />);
     const note = doc.querySelector(".booking-price-note");
-    expect(note?.textContent).toContain("1-on-1 training $70 to $85 each");
-    expect(note?.textContent).toContain("partner training $75 to $120 each");
+    // Virtual 1-on-1, 15 sessions for $875.
+    expect(note?.textContent).toContain("Sessions from $58.33 each, in person or virtual.");
     expect(note?.querySelector('a[href="/pricing"]')).not.toBeNull();
   });
 

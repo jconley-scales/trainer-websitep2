@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { availableDays, availabilityWindow, gymTimeToUtc, utcToGymTime, withoutTaken } from "@/lib/booking-availability";
 
 // Thursday 2026-10-22 noon UTC = 8:00 in New York (EDT), so that day's 8:00
-// session has already started and only 9:30 is still offered.
+// session has already started and only 9:45 is still offered.
 const NOW = new Date("2026-10-22T12:00:00Z");
 
 const HOUR = 60 * 60 * 1000;
@@ -17,11 +17,13 @@ function localTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-const WEEKEND_TIMES = ["08:00", "09:30", "11:00", "12:30", "14:00", "15:30"];
+const WEEKEND_TIMES = ["08:00", "09:45", "11:30", "13:15", "15:00"];
+const VIRTUAL_TIMES = ["11:00", "12:45", "14:30"];
+const BREAK = 45 * 60 * 1000;
 
-describe("availability", () => {
+describe("in-person availability", () => {
   it("offers only future Thursday, Saturday and Sunday slots, each 1 hour", () => {
-    const days = availableDays(NOW);
+    const days = availableDays(NOW, "in-person");
     expect(days.length).toBeGreaterThan(0);
     for (const day of days) {
       const weekday = new Date(`${day.date}T12:00:00Z`).getUTCDay();
@@ -33,49 +35,70 @@ describe("availability", () => {
     }
   });
 
-  it("offers Thursday at 8:00 and 9:30", () => {
-    const thursday = availableDays(NOW).find((d) => d.date === "2026-10-29");
-    expect(thursday?.slots.map((s) => localTime(s.startsAt))).toEqual(["08:00", "09:30"]);
+  it("offers Thursday at 8:00 and 9:45", () => {
+    const thursday = availableDays(NOW, "in-person").find((d) => d.date === "2026-10-29");
+    expect(thursday?.slots.map((s) => localTime(s.startsAt))).toEqual(["08:00", "09:45"]);
   });
 
-  it("offers weekends from 8:00 to 15:30, all ending by 5pm", () => {
-    const days = availableDays(NOW);
+  it("offers weekends from 8:00 to 15:00, all ending by 4pm", () => {
+    const days = availableDays(NOW, "in-person");
     for (const date of ["2026-10-24", "2026-10-25"]) {
       const day = days.find((d) => d.date === date);
       expect(day?.slots.map((s) => localTime(s.startsAt))).toEqual(WEEKEND_TIMES);
       for (const slot of day!.slots) {
-        expect(localTime(slot.endsAt) <= "17:00").toBe(true);
-      }
-    }
-  });
-
-  it("leaves a 30-minute break between sessions on the same day", () => {
-    for (const day of availableDays(NOW)) {
-      for (let i = 1; i < day.slots.length; i++) {
-        const gap = Date.parse(day.slots[i].startsAt) - Date.parse(day.slots[i - 1].endsAt);
-        expect(gap).toBe(HOUR / 2);
+        expect(localTime(slot.endsAt) <= "16:00").toBe(true);
       }
     }
   });
 
   it("drops a slot that has already started today", () => {
-    const today = availableDays(NOW).find((d) => d.date === "2026-10-22");
-    expect(today?.slots.map((s) => localTime(s.startsAt))).toEqual(["09:30"]);
+    const today = availableDays(NOW, "in-person").find((d) => d.date === "2026-10-22");
+    expect(today?.slots.map((s) => localTime(s.startsAt))).toEqual(["09:45"]);
   });
 
   it("places 8:00 in the gym's zone at the right UTC instant across daylight saving", () => {
-    const days = availableDays(NOW);
+    const days = availableDays(NOW, "in-person");
     // EDT (UTC-4) on Saturday 24 October; EST (UTC-5) on Sunday 1 November.
     expect(days.find((d) => d.date === "2026-10-24")?.slots[0].startsAt).toBe("2026-10-24T12:00:00.000Z");
     expect(days.find((d) => d.date === "2026-11-01")?.slots[0].startsAt).toBe("2026-11-01T13:00:00.000Z");
   });
+});
 
-  it("covers the whole offered range with its lookup window", () => {
+describe("virtual availability", () => {
+  it("offers only Saturday and Sunday, at 11:00, 12:45 and 2:30, each 1 hour and over by 4pm", () => {
+    const days = availableDays(NOW, "virtual");
+    expect(days.length).toBeGreaterThan(0);
+    for (const day of days) {
+      expect([6, 0]).toContain(new Date(`${day.date}T12:00:00Z`).getUTCDay());
+      expect(day.slots.map((s) => localTime(s.startsAt))).toEqual(VIRTUAL_TIMES);
+      for (const slot of day.slots) {
+        expect(Date.parse(slot.endsAt) - Date.parse(slot.startsAt)).toBe(HOUR);
+        expect(localTime(slot.endsAt) <= "16:00").toBe(true);
+      }
+    }
+  });
+
+  it("offers no virtual sessions on Thursday", () => {
+    expect(availableDays(NOW, "virtual").find((d) => d.date === "2026-10-29")).toBeUndefined();
+  });
+});
+
+describe("both schedules", () => {
+  it.each(["in-person", "virtual"] as const)("leave a 45-minute break between %s sessions on the same day", (format) => {
+    for (const day of availableDays(NOW, format)) {
+      for (let i = 1; i < day.slots.length; i++) {
+        const gap = Date.parse(day.slots[i].startsAt) - Date.parse(day.slots[i - 1].endsAt);
+        expect(gap).toBe(BREAK);
+      }
+    }
+  });
+
+  it.each(["in-person", "virtual"] as const)("fall inside the lookup window (%s)", (format) => {
     const { from, to } = availabilityWindow(NOW);
-    const all = availableDays(NOW).flatMap((d) => d.slots);
-    for (const slot of all) {
-      expect(Date.parse(slot.startsAt)).toBeGreaterThanOrEqual(from.getTime());
-      expect(Date.parse(slot.startsAt)).toBeLessThan(to.getTime());
+    for (const slot of availableDays(NOW, format).flatMap((d) => d.slots)) {
+      // A booking up to the break either side of a slot still matters, so the window reaches that far too.
+      expect(Date.parse(slot.startsAt) - BREAK).toBeGreaterThanOrEqual(from.getTime());
+      expect(Date.parse(slot.endsAt) + BREAK).toBeLessThanOrEqual(to.getTime());
     }
   });
 });
@@ -87,35 +110,47 @@ describe("withoutTaken", () => {
     start: Date.parse(startIso),
     end: Date.parse(startIso) + minutes * MINUTE,
   });
-  // Saturday 2026-10-24, which has several slots (8:00, 9:30, 11:00 … in New York), so the day itself stays.
-  const saturday = () => availableDays(NOW).find((d) => d.date === "2026-10-24")!;
+  /** Saturday 2026-10-24's slot times (New York) for one schedule, once `taken` is removed. */
+  const saturdayAfter = (format: "in-person" | "virtual", taken: { start: number; end: number }[]) =>
+    withoutTaken(availableDays(NOW, format), taken)
+      .find((d) => d.date === "2026-10-24")
+      ?.slots.map((s) => localTime(s.startsAt));
 
   it("drops a taken slot, matching instants whatever the ISO format", () => {
-    const days = availableDays(NOW);
-    const first = saturday().slots[0];
+    const first = availableDays(NOW, "in-person").find((d) => d.date === "2026-10-24")!.slots[0];
     // The database returns "+00:00" offsets rather than ".000Z".
     const taken = [booked(first.startsAt.replace(".000Z", "+00:00"))];
-    const after = withoutTaken(days, taken).find((d) => d.date === "2026-10-24")!;
-    expect(after.slots.map((s) => s.id)).not.toContain(first.id);
-    expect(after.slots).toHaveLength(saturday().slots.length - 1);
+    expect(saturdayAfter("in-person", taken)).toEqual(WEEKEND_TIMES.slice(1));
   });
 
-  it("drops a slot that a booking at another time overlaps (e.g. the trainer's 9:45 session)", () => {
-    // 9:45 to 10:45 New York (EDT) overlaps the 9:30 to 10:30 slot only.
-    const taken = [booked("2026-10-24T13:45:00Z", 60)];
-    const after = withoutTaken(availableDays(NOW), taken).find((d) => d.date === "2026-10-24")!;
-    expect(after.slots.map((s) => localTime(s.startsAt))).toEqual(["08:00", "11:00", "12:30", "14:00", "15:30"]);
+  it("drops a slot a booking at another time overlaps, or leaves less than the break beside", () => {
+    // The trainer's 10:00 to 11:00 (New York, EDT) session overlaps 9:45, and
+    // would leave only 30 minutes before 11:30.
+    const taken = [booked("2026-10-24T14:00:00Z", 60)];
+    expect(saturdayAfter("in-person", taken)).toEqual(["08:00", "13:15", "15:00"]);
   });
 
-  it("keeps a slot that a booking only touches end to start", () => {
-    // 10:30 to 11:00 New York sits exactly between the 9:30 and 11:00 slots.
-    const taken = [booked("2026-10-24T14:30:00Z", 30)];
-    const after = withoutTaken(availableDays(NOW), taken).find((d) => d.date === "2026-10-24")!;
-    expect(after.slots).toHaveLength(saturday().slots.length);
+  it("keeps a slot exactly the break away from a booking", () => {
+    // 6:15 to 7:15 New York ends exactly 45 minutes before the 8:00 slot.
+    expect(saturdayAfter("in-person", [booked("2026-10-24T10:15:00Z", 60)])).toEqual(WEEKEND_TIMES);
+    // 9:15 to 10:15 New York ends exactly 45 minutes before the 11:00 virtual slot.
+    expect(saturdayAfter("virtual", [booked("2026-10-24T13:15:00Z", 60)])).toEqual(VIRTUAL_TIMES);
+  });
+
+  it("keeps the trainer's break between in-person and virtual sessions on the same day", () => {
+    // A virtual session 11:00 to 12:00 New York hides in-person 9:45 (ends
+    // 10:45, too close) and 11:30 (overlaps), but not 1:15.
+    const virtual = [booked("2026-10-24T15:00:00Z")];
+    expect(saturdayAfter("in-person", virtual)).toEqual(["08:00", "13:15", "15:00"]);
+    expect(saturdayAfter("virtual", virtual)).toEqual(["12:45", "14:30"]);
+
+    // An in-person session 1:15 to 2:15 hides virtual 12:45 and 2:30.
+    const inPerson = [booked("2026-10-24T17:15:00Z")];
+    expect(saturdayAfter("virtual", inPerson)).toEqual(["11:00"]);
   });
 
   it("drops a day once all its slots are taken", () => {
-    const days = availableDays(NOW);
+    const days = availableDays(NOW, "in-person");
     const taken = days[0].slots.map((s) => booked(s.startsAt));
     const result = withoutTaken(days, taken);
     expect(result.map((d) => d.date)).not.toContain(days[0].date);
@@ -123,7 +158,7 @@ describe("withoutTaken", () => {
   });
 
   it("changes nothing when nothing is taken", () => {
-    const days = availableDays(NOW);
+    const days = availableDays(NOW, "virtual");
     expect(withoutTaken(days, [])).toEqual(days);
   });
 });

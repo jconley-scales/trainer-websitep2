@@ -40,8 +40,10 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   `booking-fields.tsx` with the add form
 - `proxy.ts` — Next 16's renamed middleware; gates `/admin` only
 - `lib/site.ts` — ALL site copy (name, trainer, services, prices, testimonials)
-- `lib/session-types.ts` — session types (1-on-1, Partner): ids, labels, tags
-- `lib/booking-availability.ts` — bookable slots (generated, not from the DB)
+- `lib/session-types.ts` — session types (1-on-1, Partner, and a virtual version
+  of each): ids, labels, tags, and `format` (in-person or virtual)
+- `lib/booking-availability.ts` — bookable slots (generated, not from the DB),
+  one schedule per format, and the trainer's break between sessions
 - `lib/format.ts` — `DISPLAY_TIME_ZONE` and date/time formatting
 - `lib/supabase/public.ts` — anon client (insert-only); `server.ts` — session client
 - `lib/notify.ts` — new-booking email
@@ -52,7 +54,7 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
 ## Placeholders still to replace
 
 - Everything in `lib/site.ts` is placeholder copy (Sarah Thompson, prices, quotes)
-- Schedule: `WEEKDAYS`, `TIMES`, `SESSION_MINUTES` in `lib/booking-availability.ts`
+- Schedule: `SCHEDULES`, `SESSION_MINUTES`, `BREAK_MINUTES` in `lib/booking-availability.ts`
 - Time zone: `DISPLAY_TIME_ZONE` in `lib/format.ts` (currently America/New_York)
 - Privacy page (`SITE.privacy` in `lib/site.ts`) promises booking requests and
   their emails are deleted two years after a client's last session. A nightly
@@ -72,8 +74,9 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   bookings (RLS via `is_admin()`); they skip the slot schedule, are saved as
   confirmed, and are exempt from the per-email cap. See
   `docs/adr/0001-admin-bookings.md` and `GLOSSARY.md`.
-- Every website request records a `session_type`, `'one-on-one'` or `'partner'`
-  (migration `0011`; text plus a check, no enum). The ids and labels live in
+- Every website request records a `session_type`: `'one-on-one'`, `'partner'`,
+  `'virtual-one-on-one'` or `'virtual-partner'` (migrations `0011`, `0012`;
+  text plus a check, no enum). The ids and labels live in
   `lib/session-types.ts`, which form, action, emails and /admin all import;
   `SITE.pricing` keeps its own copy and a unit test checks they agree. The
   column is nullable: older rows have no type (not backfilled) and admin
@@ -81,14 +84,21 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   `submitBooking`, which rejects a missing or unknown value. (The column's
   check only limits the values; "required for website requests" is not a
   check, since that would also block updating older untyped rows.)
-  Scheduling ignores it: same slots, same index, same per-email cap. The admin
-  card shows a "1-on-1"/"Partner" tag; the trainer's new-booking email and the
-  Confirmed email add a "Session:" line, left out when there is no type.
+  Its `format` picks the schedule: in-person types use the in-person slots,
+  virtual types the virtual slots (weekends 11 to 4), and `submitBooking`
+  refuses a time from the wrong one. Otherwise scheduling ignores it: same
+  index, same per-email cap. The admin card shows a tag ("1-on-1", "Virtual
+  partner", ...); the trainer's new-booking email and the Confirmed email add a
+  "Session:" line, left out when there is no type. The video link is not
+  stored; the trainer sends it in the Confirmed email's note.
 - Taken times come from the `taken_booking_times()` SECURITY DEFINER function,
   which returns each live booking's start and end only, never who booked
-  (migration `0009`). The calendar hides every slot a booking overlaps, and
-  `submitBooking` refuses one too, since admin bookings can start at any
-  quarter hour.
+  (migration `0009`). The calendar hides every slot a booking overlaps or
+  sits less than the trainer's 45-minute break (`BREAK_MINUTES`) from, and
+  `submitBooking` refuses one too (`clashesWithTaken`), since admin bookings
+  can start at any quarter hour and the in-person and virtual schedules
+  interleave at weekends. The admin add/edit overlap warning does not apply
+  the break.
 - Double booking is prevented by a unique index on live start times; the
   actions turn Postgres error `23505` into a friendly "just taken" message.
 - `addBooking` also blocks an exact start-time clash itself; a booking that

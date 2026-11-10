@@ -12,7 +12,7 @@ import {
   type TakenTime,
 } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
-import { SESSION_TYPES, type SessionType } from "@/lib/session-types";
+import { SESSION_TYPES, sessionTypeFormat, sessionTypeTitle, type SessionType } from "@/lib/session-types";
 import { SITE } from "@/lib/site";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -39,13 +39,21 @@ function monthGrid(year: number, month: number): number[][] {
   return weeks;
 }
 
-/** Offered times minus any a booking overlaps, including `alsoTaken` (this
- *  visit's own requests, in case the lookup is behind or fails). If the lookup
- *  fails, offer the rest: the database still refuses a time that is taken. */
-async function loadAvailableDays(alsoTaken: readonly AvailableSlot[]): Promise<AvailableDay[]> {
+/** The times taken so far, and when they were looked up. */
+type TakenSnapshot = { taken: TakenTime[]; now: Date };
+
+/** Every time a booking holds, including `alsoTaken` (this visit's own
+ *  requests, in case the lookup is behind or fails). If the lookup fails, offer
+ *  the rest: the server and the database still refuse a time that is taken. */
+async function loadTaken(alsoTaken: readonly AvailableSlot[]): Promise<TakenSnapshot> {
   const taken = await getTakenTimes().catch(() => [] as TakenTime[]);
   const own = alsoTaken.map((slot) => ({ start: Date.parse(slot.startsAt), end: Date.parse(slot.endsAt) }));
-  return withoutTaken(availableDays(new Date()), [...taken, ...own]);
+  return { taken: [...taken, ...own], now: new Date() };
+}
+
+/** The session type's own offered times, minus any a booking clashes with. */
+function daysFor(type: SessionType, { taken, now }: TakenSnapshot): AvailableDay[] {
+  return withoutTaken(availableDays(now, sessionTypeFormat(type)), taken);
 }
 
 /** The contact details a visitor gives, kept (in memory only) so they can book
@@ -67,7 +75,7 @@ export function BookingCalendar({
 }) {
   // Availability is computed on the client (current time), so the page itself
   // stays static. The server action re-validates the chosen slot on submit.
-  const [days, setDays] = useState<AvailableDay[] | null>(null);
+  const [snapshot, setSnapshot] = useState<TakenSnapshot | null>(null);
   const [monthIndex, setMonthIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
@@ -75,8 +83,8 @@ export function BookingCalendar({
   const [email, setEmail] = useState(initialDetails?.email ?? "");
   const [phone, setPhone] = useState(initialDetails?.phone ?? "");
   const [note, setNote] = useState("");
-  // Never preselected: the visitor chooses 1-on-1 or partner themselves, and
-  // the calendar only opens once they have.
+  // Never preselected: the visitor chooses the kind of session themselves, and
+  // the calendar (that kind's own schedule) only opens once they have.
   const [sessionType, setSessionType] = useState<SessionType | null>(null);
   const [website, setWebsite] = useState("");
   const [step, setStep] = useState<Step>("idle");
@@ -92,8 +100,8 @@ export function BookingCalendar({
 
   useEffect(() => {
     let cancelled = false;
-    loadAvailableDays(alsoTaken).then((fresh) => {
-      if (!cancelled) setDays(fresh);
+    loadTaken(alsoTaken).then((fresh) => {
+      if (!cancelled) setSnapshot(fresh);
     });
     return () => {
       cancelled = true;
@@ -103,27 +111,28 @@ export function BookingCalendar({
   }, []);
 
   // Same markup on the server and the first client paint, so no hydration clash.
-  if (days === null) {
+  if (snapshot === null) {
     return <p className="booking-hint">Loading available times…</p>;
   }
 
-  if (days.length === 0) {
-    return (
-      <p className="booking-empty">
-        There are no open times just now. Please check back soon, or{" "}
-        <a href="/contact">get in touch</a> and we will find a time together.
-      </p>
-    );
-  }
-
+  const days = sessionType ? daysFor(sessionType, snapshot) : [];
   const slotsByDate = new Map(days.map((day) => [day.date, day.slots]));
   const months = [...new Set(days.map((day) => monthKey(day.date)))]; // already sorted
-  const safeMonthIndex = Math.min(monthIndex, months.length - 1);
-  const [yStr, mStr] = months[safeMonthIndex].split("-");
+  const safeMonthIndex = Math.max(0, Math.min(monthIndex, months.length - 1));
+  // No months when the chosen kind has no open times; the calendar is not shown then.
+  const [yStr, mStr] = (months[safeMonthIndex] ?? "2000-01").split("-");
   const year = Number(yStr);
   const month = Number(mStr);
   const weeks = monthGrid(year, month);
   const daySlots = selectedDate ? slotsByDate.get(selectedDate) ?? [] : [];
+
+  /** Switching kind keeps the chosen day and time only if that kind offers them too. */
+  function chooseSessionType(type: SessionType) {
+    setSessionType(type);
+    const next = daysFor(type, snapshot!);
+    if (selectedDate && !next.some((day) => day.date === selectedDate)) setSelectedDate(null);
+    if (selectedSlot && !next.some((day) => day.slots.some((s) => s.id === selectedSlot.id))) setSelectedSlot(null);
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -146,10 +155,10 @@ export function BookingCalendar({
       onBooked(selectedSlot, { name, email, phone });
     } else if (result.taken) {
       // Someone else got there first: show the up-to-date times and say so.
-      const fresh = await loadAvailableDays(alsoTaken);
-      setDays(fresh);
+      const fresh = await loadTaken(alsoTaken);
+      setSnapshot(fresh);
       setSelectedSlot(null);
-      if (!fresh.some((day) => day.date === selectedDate)) setSelectedDate(null);
+      if (!daysFor(sessionType, fresh).some((day) => day.date === selectedDate)) setSelectedDate(null);
       setStep("idle");
       setTakenNotice(result.error);
     } else {
@@ -180,7 +189,7 @@ export function BookingCalendar({
                 checked={sessionType === type.id}
                 required
                 aria-describedby={sessionType ? undefined : sessionTypeHintId}
-                onChange={() => setSessionType(type.id)}
+                onChange={() => chooseSessionType(type.id)}
               />
               <span className="session-type-text">
                 <span className="session-type-title">{type.title}</span>{" "}
@@ -200,7 +209,13 @@ export function BookingCalendar({
       </fieldset>
 
       {/* Step 2: pick a day (once the kind of session is chosen) */}
-      {sessionType ? (
+      {sessionType && days.length === 0 ? (
+        <p className="booking-empty">
+          There are no open times for this kind of session just now. Please check back soon, or{" "}
+          <a href="/contact">get in touch</a> and we will find a time together.
+        </p>
+      ) : null}
+      {sessionType && days.length > 0 ? (
       <div className="booking-calendar">
         <div className="booking-month-bar">
           <button
@@ -316,7 +331,8 @@ export function BookingCalendar({
             Your details
           </h2>
           <p className="booking-chosen">
-            Booking <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
+            Booking {sessionType ? `${sessionTypeTitle(sessionType).toLowerCase()} on ` : null}
+            <strong>{formatDate(selectedSlot.startsAt)}</strong>,{" "}
             <strong>{formatTimeRange(selectedSlot.startsAt, selectedSlot.endsAt)}</strong>.
           </p>
           <PrivacyNote />

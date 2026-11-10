@@ -1,6 +1,7 @@
 // @vitest-environment node
 /**
- * The session type a visitor chooses on /book (1-on-1 or Partner), against the
+ * The session type a visitor chooses on /book (1-on-1 or Partner, in person or
+ * virtual), against the
  * real local Supabase (`npx supabase start`). Skipped when it isn't running.
  * Pinned to 127.0.0.1, like the other DB tests, so it never touches the hosted
  * project.
@@ -24,7 +25,8 @@ vi.mock("@/lib/notify", () => ({ notifyTrainerOfBooking }));
 vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
 
 import { getTakenTimes, submitBooking, type BookingInput } from "@/app/(marketing)/book/actions";
-import { availableDays, overlapsTaken, type AvailableSlot } from "@/lib/booking-availability";
+import { availableDays, clashesWithTaken, type AvailableSlot } from "@/lib/booking-availability";
+import type { SessionFormat } from "@/lib/session-types";
 
 const noSession = { auth: { persistSession: false } };
 const service = createClient(LOCAL_URL, LOCAL_SERVICE_KEY, noSession);
@@ -36,18 +38,18 @@ const running = await fetch(`${LOCAL_URL}/rest/v1/`, { headers: { apikey: LOCAL_
 
 const TEST_DOMAIN = "session-type.example.test";
 const email = (who: string) => `${who}-${Date.now()}-${Math.random().toString(36).slice(2)}@${TEST_DOMAIN}`;
-const MISSING = "Please choose 1-on-1 or partner training.";
+const MISSING = "Please choose the kind of session you would like.";
 
 /**
  * Future slots nobody holds yet, from the far end of the schedule, so they
  * never collide with booking-guards.test.ts (which takes the soonest) when
  * the files run in parallel.
  */
-async function freeSlots(count: number): Promise<AvailableSlot[]> {
+async function freeSlots(count: number, format: SessionFormat = "in-person"): Promise<AvailableSlot[]> {
   const taken = await getTakenTimes();
-  const free = availableDays(new Date())
+  const free = availableDays(new Date(), format)
     .flatMap((d) => d.slots)
-    .filter((s) => !overlapsTaken(s, taken));
+    .filter((s) => !clashesWithTaken(s, taken));
   if (free.length < count) throw new Error(`Need ${count} free slots, found ${free.length}`);
   return free.slice(-count);
 }
@@ -86,8 +88,13 @@ describe.skipIf(!running)("session type (local Supabase)", () => {
     await service.from("booking_requests").delete().ilike("email", `%@${TEST_DOMAIN}`);
   });
 
-  it.each(["one-on-one", "partner"] as const)("saves a %s request with its type and tells the trainer", async (type) => {
-    const [slot] = await freeSlots(1);
+  it.each([
+    ["one-on-one", "in-person"],
+    ["partner", "in-person"],
+    ["virtual-one-on-one", "virtual"],
+    ["virtual-partner", "virtual"],
+  ] as const)("saves a %s request with its type and tells the trainer", async (type, format) => {
+    const [slot] = await freeSlots(1, format);
     const who = email(type);
 
     expect(await submitBooking(request(slot, who, type))).toEqual({ ok: true });
@@ -122,6 +129,35 @@ describe.skipIf(!running)("session type (local Supabase)", () => {
 
     const ok = await anon.from("booking_requests").insert({ ...row, email: email("direct"), session_type: "partner" });
     expect(ok.error).toBeNull();
+    const virtual = await anon
+      .from("booking_requests")
+      .insert({ name: "Pat Example", ...farTime(), email: email("direct"), session_type: "virtual-partner" });
+    expect(virtual.error).toBeNull();
+  });
+
+  it("refuses a virtual request at an in-person time, and an in-person one at a virtual time", async () => {
+    const [inPerson] = await freeSlots(1, "in-person");
+    const [virtual] = await freeSlots(1, "virtual");
+    const virtualAtInPerson = await submitBooking(request(inPerson, email("wrong-a"), "virtual-one-on-one"));
+    const inPersonAtVirtual = await submitBooking(request(virtual, email("wrong-b"), "partner"));
+
+    expect(virtualAtInPerson).toMatchObject({ ok: false, taken: true });
+    expect(inPersonAtVirtual).toMatchObject({ ok: false, taken: true });
+    expect(notifyTrainerOfBooking).not.toHaveBeenCalled();
+  });
+
+  it("refuses an in-person time that would leave the trainer less than the break after a virtual session", async () => {
+    const [virtual] = await freeSlots(1, "virtual");
+    expect(await submitBooking(request(virtual, email("virtual"), "virtual-one-on-one"))).toEqual({ ok: true });
+
+    // The same day's in-person slots that overlap it or sit within 45 minutes of it.
+    const near = availableDays(new Date(), "in-person")
+      .flatMap((d) => d.slots)
+      .filter((s) => clashesWithTaken(s, [{ start: Date.parse(virtual.startsAt), end: Date.parse(virtual.endsAt) }]));
+    expect(near.length).toBeGreaterThan(0);
+    for (const slot of near) {
+      expect(await submitBooking(request(slot, email("near"), "one-on-one"))).toMatchObject({ ok: false, taken: true });
+    }
   });
 
   it("keeps rows with no type recorded, and still lets them be confirmed", async () => {

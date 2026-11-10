@@ -1,9 +1,9 @@
 "use server";
 
 import { after } from "next/server";
-import { availabilityWindow, availableDays, overlapsTaken, type TakenTime } from "@/lib/booking-availability";
+import { availabilityWindow, availableDays, BREAK_MINUTES, clashesWithTaken, type TakenTime } from "@/lib/booking-availability";
 import { notifyTrainerOfBooking } from "@/lib/notify";
-import { isSessionType, SESSION_TYPE_REQUIRED, type SessionType } from "@/lib/session-types";
+import { isSessionType, SESSION_TYPE_REQUIRED, sessionTypeFormat, type SessionType } from "@/lib/session-types";
 import { SITE } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -30,7 +30,7 @@ export type BookingInput = {
   note: string;
   startsAt: string;
   endsAt: string;
-  /** 1-on-1 or Partner. Required; null only before the visitor has chosen. */
+  /** 1-on-1, Partner or a virtual one. Required; null only before the visitor has chosen. */
   sessionType: SessionType | null;
   /** Bot trap: hidden from people, so only bots fill it in. */
   website?: string;
@@ -51,7 +51,7 @@ async function takenBetween(from: string, to: string): Promise<TakenTime[] | nul
 
 /**
  * The times already held by a live booking, over the window the booking page
- * shows, so it can hide every slot they overlap. On failure returns [] so the
+ * shows, so it can hide every slot they overlap or sit too close to. On failure returns [] so the
  * page still works; submitBooking checks again, and the unique index is what
  * really prevents two bookings at one start time.
  */
@@ -63,7 +63,8 @@ export async function getTakenTimes(): Promise<TakenTime[]> {
 /**
  * Save a public booking request. Reachable by direct POST, so it re-validates
  * everything: the contact fields, and that the chosen time is a real, still-open
- * slot (not an arbitrary time posted by hand) that no live booking overlaps. Writes with the anon client, so
+ * slot of the chosen session type's schedule (not an arbitrary time posted by
+ * hand) that no live booking overlaps or sits too close to. Writes with the anon client, so
  * row level security allows only the insert. The database's unique index turns
  * a time someone else already holds into a friendly "just taken" message, and
  * its per-email limit on waiting requests into a friendly "you have a few
@@ -95,8 +96,9 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
     return { ok: false, error: "Please shorten your message a little." };
   }
 
-  // The time must be one of the real, future slots we actually offer.
-  const slot = availableDays(new Date())
+  // The time must be one of the real, future slots we offer for this kind of
+  // session (virtual sessions have their own schedule).
+  const slot = availableDays(new Date(), sessionTypeFormat(sessionType))
     .flatMap((day) => day.slots)
     .find((s) => s.startsAt === input.startsAt && s.endsAt === input.endsAt);
   if (!slot) {
@@ -109,11 +111,16 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
     taken: true,
   } as const;
 
-  // The unique index only catches a booking at the same start time; one the
-  // trainer added at another time may still cover part of this slot. If the
-  // lookup fails, carry on: the index still guards the start time.
-  const taken = await takenBetween(slot.startsAt, slot.endsAt);
-  if (taken && overlapsTaken(slot, taken)) return justTaken;
+  // The unique index only catches a booking at the same start time; one at
+  // another time (an admin booking, or a slot from the other schedule) may
+  // still cover part of this slot or leave the trainer less than the break.
+  // If the lookup fails, carry on: the index still guards the start time.
+  const breakMs = BREAK_MINUTES * 60000;
+  const taken = await takenBetween(
+    new Date(Date.parse(slot.startsAt) - breakMs).toISOString(),
+    new Date(Date.parse(slot.endsAt) + breakMs).toISOString(),
+  );
+  if (taken && clashesWithTaken(slot, taken)) return justTaken;
 
   const db = createPublicClient();
   const { error } = await db.from("booking_requests").insert({
