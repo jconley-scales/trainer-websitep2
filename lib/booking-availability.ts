@@ -12,8 +12,8 @@ import type { SessionFormat } from "@/lib/session-types";
  * Sessions are 1 hour, and the trainer needs a 45-minute break between any two
  * of them (to travel to the next home, or to get ready). Each schedule's start
  * times are spaced to leave that break:
- * - In person: Thursday 8:00 and 9:45; Saturday and Sunday 8:00, 9:45, 11:30,
- *   1:15 and 3:00 (the last ends at 4:00)
+ * - In person: Saturday and Sunday 8:00, 9:45, 11:30, 1:15 and 3:00 (the
+ *   last ends at 4:00)
  * - Virtual: Saturday and Sunday 11:00, 12:45 and 2:30 (between 11 and 4)
  * The two schedules overlap at weekends, so a booked session also hides every
  * slot, of either kind, that would leave less than the break around it.
@@ -41,7 +41,6 @@ type Schedule = Partial<Record<number, string[]>>;
 
 const SCHEDULES: Record<SessionFormat, Schedule> = {
   "in-person": {
-    4: startTimes("08:00", 2), // Thursday: 8:00, 9:45
     6: startTimes("08:00", 5), // Saturday: 8:00 … 15:00 (ends 16:00)
     0: startTimes("08:00", 5), // Sunday: same as Saturday
   },

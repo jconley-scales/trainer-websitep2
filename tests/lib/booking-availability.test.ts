@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { availableDays, availabilityWindow, gymTimeToUtc, utcToGymTime, withoutTaken } from "@/lib/booking-availability";
 
-// Thursday 2026-10-22 noon UTC = 8:00 in New York (EDT), so that day's 8:00
-// session has already started and only 9:45 is still offered.
+// Thursday 2026-10-22 noon UTC = 8:00 in New York (EDT). The trainer no longer
+// works Thursdays, so the first day offered is Saturday the 24th.
 const NOW = new Date("2026-10-22T12:00:00Z");
+// Saturday 2026-10-24 noon UTC = 8:00 in New York (EDT): that day's 8:00
+// session has already started.
+const SATURDAY_8AM = new Date("2026-10-24T12:00:00Z");
 
 const HOUR = 60 * 60 * 1000;
 
@@ -22,12 +25,12 @@ const VIRTUAL_TIMES = ["11:00", "12:45", "14:30"];
 const BREAK = 45 * 60 * 1000;
 
 describe("in-person availability", () => {
-  it("offers only future Thursday, Saturday and Sunday slots, each 1 hour", () => {
+  it("offers only future Saturday and Sunday slots, each 1 hour", () => {
     const days = availableDays(NOW, "in-person");
     expect(days.length).toBeGreaterThan(0);
     for (const day of days) {
       const weekday = new Date(`${day.date}T12:00:00Z`).getUTCDay();
-      expect([4, 6, 0]).toContain(weekday);
+      expect([6, 0]).toContain(weekday);
       for (const slot of day.slots) {
         expect(Date.parse(slot.startsAt)).toBeGreaterThan(NOW.getTime());
         expect(Date.parse(slot.endsAt) - Date.parse(slot.startsAt)).toBe(HOUR);
@@ -35,9 +38,10 @@ describe("in-person availability", () => {
     }
   });
 
-  it("offers Thursday at 8:00 and 9:45", () => {
-    const thursday = availableDays(NOW, "in-person").find((d) => d.date === "2026-10-29");
-    expect(thursday?.slots.map((s) => localTime(s.startsAt))).toEqual(["08:00", "09:45"]);
+  it("offers no in-person sessions on Thursday", () => {
+    const days = availableDays(NOW, "in-person");
+    expect(days.find((d) => d.date === "2026-10-22")).toBeUndefined();
+    expect(days.find((d) => d.date === "2026-10-29")).toBeUndefined();
   });
 
   it("offers weekends from 8:00 to 15:00, all ending by 4pm", () => {
@@ -52,8 +56,8 @@ describe("in-person availability", () => {
   });
 
   it("drops a slot that has already started today", () => {
-    const today = availableDays(NOW, "in-person").find((d) => d.date === "2026-10-22");
-    expect(today?.slots.map((s) => localTime(s.startsAt))).toEqual(["09:45"]);
+    const today = availableDays(SATURDAY_8AM, "in-person").find((d) => d.date === "2026-10-24");
+    expect(today?.slots.map((s) => localTime(s.startsAt))).toEqual(WEEKEND_TIMES.slice(1));
   });
 
   it("places 8:00 in the gym's zone at the right UTC instant across daylight saving", () => {
