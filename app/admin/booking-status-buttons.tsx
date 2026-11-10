@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { cancelBooking, confirmBooking, setBookingStatus } from "./actions";
+import { cancelBooking, confirmBooking, resendConfirmation, setBookingStatus } from "./actions";
 import { NO_EMAIL } from "./copy";
 import { CANCEL_REASON_MAX, CONFIRM_NOTE_MAX } from "./limits";
 
@@ -69,7 +69,7 @@ const PANELS: Record<
   },
 };
 
-/** What happened after confirming or cancelling, shown under the buttons. */
+/** What happened after confirming, cancelling or resending, shown under the buttons. */
 type Outcome = { kind: "done" | "not-emailed"; text: string };
 
 export function BookingStatusButtons({
@@ -79,6 +79,7 @@ export function BookingStatusButtons({
   clientFirstName,
   when,
   hasEmail = true,
+  canResend = false,
 }: {
   id: string;
   status: Status;
@@ -90,6 +91,8 @@ export function BookingStatusButtons({
   when: string;
   /** False for an admin booking with no email: nobody is emailed, so the panels say so and ask for no note. */
   hasEmail?: boolean;
+  /** True for a confirmed booking that hasn't started and has an email: offers "Resend confirmation". */
+  canResend?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +135,17 @@ export function BookingStatusButtons({
     startTransition(async () => {
       const result = await setBookingStatus(id, to);
       if (!result.ok) setError(result.error);
+    });
+  }
+
+  function resend() {
+    setOpen(null);
+    setError(null);
+    setOutcome(null);
+    startTransition(async () => {
+      const result = await resendConfirmation(id);
+      if (result.ok) setOutcome({ kind: "done", text: `Confirmation sent again to ${result.sentTo}.` });
+      else setError(result.error);
     });
   }
 
@@ -193,6 +207,12 @@ export function BookingStatusButtons({
             <span className="visually-hidden"> the booking for {who}</span>
           </button>
         ))}
+        {status === "confirmed" && canResend ? (
+          <button type="button" className="button button-secondary" disabled={pending} onClick={resend}>
+            Resend confirmation
+            <span className="visually-hidden"> for {who}</span>
+          </button>
+        ) : null}
       </div>
 
       {panel ? (

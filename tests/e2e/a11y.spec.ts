@@ -950,6 +950,44 @@ test.describe("/admin confirm and cancel panels", () => {
     await expectNoSeriousViolations(page, "/admin (after cancelling)");
   });
 
+  test("resend confirmation: only once confirmed; 48px, visible focus, the result is announced; axe", async ({ page, request }) => {
+    await signInAsAdminWithBooking(page, request);
+    const card = page.locator(".admin-booking").filter({ hasText: "Jordan Tester" });
+    const resend = card.getByRole("button", { name: /^Resend confirmation for Jordan Tester/ });
+    await expect(resend).toHaveCount(0);
+
+    await card.getByRole("button", { name: /^Confirm the booking for Jordan Tester/ }).click();
+    await card.getByLabel("Don't email the client").check();
+    await card.getByRole("button", { name: "Yes, confirm" }).click();
+    await expect(card.locator(".status-badge")).toHaveText("Confirmed");
+
+    // Focus is on the "Confirmed." result, just below the buttons; Resend is the last of them.
+    await expect(card.locator(".notice-message")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(resend).toBeFocused();
+    const target = await resend.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        width: rect.width,
+        height: rect.height,
+        outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2,
+      };
+    });
+    expect(target.height, "Resend confirmation height").toBeGreaterThanOrEqual(48);
+    expect(target.width, "Resend confirmation width").toBeGreaterThanOrEqual(48);
+    expect(target.outline, "Resend confirmation focus ring").toBe(true);
+
+    await page.keyboard.press("Enter");
+    // Sent (local mail viewer) or, if mail is not set up, the plain failure: either is announced.
+    const result = card.locator(".notice-message, .error-message");
+    await expect(result).toHaveText(
+      /^(Confirmation sent again to a11y-client-.+@example\.com\.|The email to Jordan didn't send\. Please try again in a few minutes, or call or email them yourself\.)$/,
+    );
+    await expect(card.locator(".status-badge")).toHaveText("Confirmed");
+    await expectNoSeriousViolations(page, "/admin (after resending)");
+  });
+
   /** Admin bookings these tests add carry this in the name, so cleanup can find them (they may have no email). */
   const ADDED_MARK = "e2e-added";
 

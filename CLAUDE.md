@@ -135,6 +135,10 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   Confirm and Cancel also offer "Don't email the client" (unticked by
   default); `confirmBooking`/`cancelBooking` skip the email only for
   `skipEmail === true`, and also return `emailed: null`.
+- "Resend confirmation" (`resendConfirmation`) sends a confirmed, not-yet-started
+  booking's Confirmed email again, without the original note (never stored).
+  It writes nothing; a booking with no email, or a mail failure, comes back as
+  `ok: false`. On success /admin names the address it went to.
 
 ## Conventions
 

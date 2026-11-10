@@ -227,6 +227,7 @@ function BookingCards({
                     clientFirstName={firstName(b.name)}
                     when={formatDayMonthTime(b.starts_at)}
                     hasEmail={b.email !== null}
+                    canResend={b.status === "confirmed" && b.email !== null && Date.parse(b.starts_at) > now}
                   />
                 }
               />

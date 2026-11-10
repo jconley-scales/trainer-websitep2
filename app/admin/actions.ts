@@ -27,6 +27,8 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 export type ConfirmResult = { ok: true; emailed: boolean | null } | { ok: false; error: string };
 /** `emailed` as for ConfirmResult, for a cancelled booking. */
 export type CancelResult = ConfirmResult;
+/** `sentTo` is the address the email went to, so the trainer can check it. */
+export type ResendResult = { ok: true; sentTo: string } | { ok: false; error: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Supabase email codes are numeric; local config uses 6 digits, hosted may use up to 10.
@@ -242,6 +244,60 @@ export async function cancelBooking(id: string, reason: string, skipEmail = fals
     return { ok: true, emailed: false };
   }
   return { ok: true, emailed: true };
+}
+
+/**
+ * Send a confirmed booking's Confirmed email again, as it was first sent but
+ * without the original note (which was never stored): for a client who can't
+ * find it, or after the trainer corrects their email. Writes nothing.
+ */
+export async function resendConfirmation(id: string): Promise<ResendResult> {
+  if (typeof id !== "string" || !UUID.test(id)) {
+    return { ok: false, error: "That email could not be sent." };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/admin/sign-in");
+
+  // Row level security returns nothing to anyone but an admin.
+  const { data, error } = await supabase
+    .from("booking_requests")
+    .select("name, email, starts_at, ends_at, session_type")
+    .eq("id", id)
+    .eq("status", "confirmed");
+  if (error) return { ok: false, error: "Sorry, that did not send. Please try again." };
+  const booking = data?.[0];
+  if (!booking) {
+    return {
+      ok: false,
+      error: "This booking isn't confirmed any more, so there's nothing to resend. Please refresh the page.",
+    };
+  }
+  if (Date.parse(booking.starts_at) <= Date.now()) {
+    return { ok: false, error: "This session has already started, so there's no need to resend its confirmation." };
+  }
+  if (!booking.email) {
+    return { ok: false, error: "This booking has no email address. Add one with Edit, or let them know yourself." };
+  }
+  try {
+    await sendBookingConfirmation({
+      name: booking.name,
+      email: booking.email,
+      startsAt: booking.starts_at,
+      endsAt: booking.ends_at,
+      note: "",
+      sessionType: toSessionType(booking.session_type),
+    });
+  } catch (err) {
+    console.error("Booking confirmation email could not be resent:", err);
+    return {
+      ok: false,
+      error: `The email to ${firstName(booking.name)} didn't send. Please try again in a few minutes, or call or email them yourself.`,
+    };
+  }
+  return { ok: true, sentTo: booking.email };
 }
 
 export type AddBookingInput = {

@@ -43,7 +43,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-import { addBooking, cancelBooking, confirmBooking, editBooking, setBookingStatus } from "@/app/admin/actions";
+import { addBooking, cancelBooking, confirmBooking, editBooking, resendConfirmation, setBookingStatus } from "@/app/admin/actions";
 
 const ID = "2b9f6c1e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
 const ROW = {
@@ -859,5 +859,95 @@ describe("editBooking", () => {
     db.user = null;
     await expect(editBooking(MOVED)).rejects.toThrow("NEXT_REDIRECT");
     expect(updates()).toEqual([]);
+  });
+});
+
+describe("resendConfirmation", () => {
+  const CONFIRMED = { ...ROW, status: "confirmed", session_type: "partner" };
+  beforeEach(() => {
+    db.result = { data: [CONFIRMED], error: null };
+  });
+
+  it("sends the Confirmed email again, as it was, for a confirmed future booking", async () => {
+    const result = await resendConfirmation(ID);
+
+    expect(result).toEqual({ ok: true, sentTo: "jordan@example.com" });
+    expect(sendBookingConfirmation).toHaveBeenCalledTimes(1);
+    expect(sendBookingConfirmation).toHaveBeenCalledWith({
+      name: "Jordan Tester",
+      email: "jordan@example.com",
+      startsAt: "2030-10-25T13:00:00Z",
+      endsAt: "2030-10-25T14:00:00Z",
+      note: "",
+      sessionType: "partner",
+    });
+  });
+
+  it("re-checks the session, reading and sending nothing when signed out", async () => {
+    db.user = null;
+    await expect(resendConfirmation(ID)).rejects.toThrow("NEXT_REDIRECT");
+    expect(db.calls).toEqual([]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("only resends for a confirmed booking: a new or cancelled one (or one a non-admin can't see) sends nothing", async () => {
+    db.result = { data: [], error: null };
+    const result = await resendConfirmation(ID);
+    expect(result).toEqual({
+      ok: false,
+      error: "This booking isn't confirmed any more, so there's nothing to resend. Please refresh the page.",
+    });
+    expect(db.calls).toContainEqual(["eq", ["status", "confirmed"]]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("refuses a session that has already started, sending nothing", async () => {
+    db.result = {
+      data: [{ ...CONFIRMED, starts_at: new Date(Date.now() - 60_000).toISOString() }],
+      error: null,
+    };
+    const result = await resendConfirmation(ID);
+    expect(result).toEqual({
+      ok: false,
+      error: "This session has already started, so there's no need to resend its confirmation.",
+    });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("refuses a booking with no email on file (added by the trainer), sending nothing", async () => {
+    db.result = { data: [{ ...CONFIRMED, email: null }], error: null };
+    const result = await resendConfirmation(ID);
+    expect(result).toEqual({
+      ok: false,
+      error: "This booking has no email address. Add one with Edit, or let them know yourself.",
+    });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("reports plainly when the email does not send, and changes nothing in the database", async () => {
+    sendBookingConfirmation.mockRejectedValue(new Error("SMTP down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await resendConfirmation(ID);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "The email to Jordan didn't send. Please try again in a few minutes, or call or email them yourself.",
+    });
+    expect(db.calls.filter(([m]) => m === "update" || m === "insert")).toEqual([]);
+  });
+
+  it("rejects a bad id (posted by hand) without reading or sending anything", async () => {
+    expect(await resendConfirmation("not-a-uuid")).toMatchObject({ ok: false });
+    expect(await resendConfirmation(42 as unknown as string)).toMatchObject({ ok: false });
+    expect(db.calls).toEqual([]);
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("asks the trainer to try again when the booking can't be read, sending nothing", async () => {
+    db.result = { data: null, error: { code: "08006" } };
+    const result = await resendConfirmation(ID);
+    expect(result).toEqual({ ok: false, error: "Sorry, that did not send. Please try again." });
+    expect(sendBookingConfirmation).not.toHaveBeenCalled();
   });
 });
