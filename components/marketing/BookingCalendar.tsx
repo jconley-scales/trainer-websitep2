@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { PrivacyNote } from "@/components/marketing/PrivacyNote";
 import { getTakenTimes, submitBooking } from "@/app/(marketing)/book/actions";
@@ -12,7 +12,7 @@ import {
   type TakenTime,
 } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
-import { SESSION_TYPE_REQUIRED, SESSION_TYPES, type SessionType } from "@/lib/session-types";
+import { SESSION_TYPES, type SessionType } from "@/lib/session-types";
 import { SITE } from "@/lib/site";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -75,10 +75,9 @@ export function BookingCalendar({
   const [email, setEmail] = useState(initialDetails?.email ?? "");
   const [phone, setPhone] = useState(initialDetails?.phone ?? "");
   const [note, setNote] = useState("");
-  // Never preselected: the visitor chooses 1-on-1 or partner themselves.
+  // Never preselected: the visitor chooses 1-on-1 or partner themselves, and
+  // the calendar only opens once they have.
   const [sessionType, setSessionType] = useState<SessionType | null>(null);
-  const [sessionTypeMissing, setSessionTypeMissing] = useState(false);
-  const firstSessionTypeRef = useRef<HTMLInputElement>(null);
   const [website, setWebsite] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
@@ -89,7 +88,7 @@ export function BookingCalendar({
   const headingId = useId();
   const slotsHeadingId = useId();
   const formHeadingId = useId();
-  const sessionTypeErrorId = useId();
+  const sessionTypeHintId = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -128,13 +127,8 @@ export function BookingCalendar({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedSlot) return;
-    if (!sessionType) {
-      // Keep the time and details; send the visitor back up to the choice.
-      setSessionTypeMissing(true);
-      firstSessionTypeRef.current?.focus();
-      return;
-    }
+    // The form only shows once both are chosen; the server checks again.
+    if (!selectedSlot || !sessionType) return;
     setStep("submitting");
     setError("");
     setLimitReached(false);
@@ -176,26 +170,17 @@ export function BookingCalendar({
       {/* Step 1: choose the kind of session */}
       <fieldset className="session-type">
         <legend className="section-title">What kind of session would you like?</legend>
-        {sessionTypeMissing ? (
-          <p id={sessionTypeErrorId} className="error-message">
-            {SESSION_TYPE_REQUIRED}
-          </p>
-        ) : null}
         <div className="session-type-options">
-          {SESSION_TYPES.map((type, i) => (
+          {SESSION_TYPES.map((type) => (
             <label key={type.id} className="session-type-option">
               <input
-                ref={i === 0 ? firstSessionTypeRef : undefined}
                 type="radio"
                 name="session-type"
                 value={type.id}
                 checked={sessionType === type.id}
                 required
-                aria-describedby={sessionTypeMissing ? sessionTypeErrorId : undefined}
-                onChange={() => {
-                  setSessionType(type.id);
-                  setSessionTypeMissing(false);
-                }}
+                aria-describedby={sessionType ? undefined : sessionTypeHintId}
+                onChange={() => setSessionType(type.id)}
               />
               <span className="session-type-text">
                 <span className="session-type-title">{type.title}</span>{" "}
@@ -207,9 +192,15 @@ export function BookingCalendar({
         <p className="session-type-pricing">
           <Link href="/pricing">See pricing</Link>
         </p>
+        {sessionType ? null : (
+          <p id={sessionTypeHintId} className="booking-hint">
+            Choose one and the calendar will open below.
+          </p>
+        )}
       </fieldset>
 
-      {/* Step 2: pick a day */}
+      {/* Step 2: pick a day (once the kind of session is chosen) */}
+      {sessionType ? (
       <div className="booking-calendar">
         <div className="booking-month-bar">
           <button
@@ -289,6 +280,7 @@ export function BookingCalendar({
         </table>
         <p className="booking-hint">Days with an open session are shown in colour. Pick one to see its times.</p>
       </div>
+      ) : null}
 
       {/* Step 3: pick a time */}
       {selectedDate && daySlots.length > 0 ? (

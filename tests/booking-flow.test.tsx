@@ -59,18 +59,16 @@ async function bookFirstVisit(timeIndex = 0): Promise<string> {
 describe("booking a session", () => {
   it("links to the privacy page from the details form", async () => {
     render(<BookPage />);
-    fireEvent.click((await screen.findAllByRole("button", { name: /available$/ }))[0]);
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".slot-row")!);
-    const form = screen.getByRole("button", { name: "Request this session" }).closest("form")!;
+    await pickTime();
+    const form =screen.getByRole("button", { name: "Request this session" }).closest("form")!;
     const link = within(form).getByRole("link", { name: "How we use your details" });
     expect(link).toHaveAttribute("href", "/privacy");
   });
 
   it("tells screen reader users to share only the health details they're comfortable emailing", async () => {
     render(<BookPage />);
-    fireEvent.click((await screen.findAllByRole("button", { name: /available$/ }))[0]);
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".slot-row")!);
-    const note = screen.getByLabelText("Anything you would like me to know (optional)");
+    await pickTime();
+    const note =screen.getByLabelText("Anything you would like me to know (optional)");
     expect(note).toHaveAccessibleDescription(SITE.bookingNoteHint);
     expect(SITE.bookingNoteHint).toMatch(/health details/);
   });
@@ -106,7 +104,7 @@ describe("booking a session", () => {
 });
 
 describe("choosing a session type", () => {
-  it("asks first, above the calendar, with neither 1-on-1 nor partner chosen yet", async () => {
+  it("asks first, with neither 1-on-1 nor partner chosen yet and the calendar still closed", async () => {
     render(<BookPage />);
     const group = await screen.findByRole("group", { name: /kind of session/i });
     const oneOnOne = within(group).getByRole("radio", { name: ONE_ON_ONE });
@@ -119,8 +117,34 @@ describe("choosing a session type", () => {
     expect(within(group).getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
     expect(group).not.toHaveTextContent("$");
 
+    // No calendar, times or details form until a type is chosen; a hint says why.
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("button", { name: /available$/ })).toBeNull();
+    expect(document.querySelector(".booking-calendar, .booking-times, .booking-form")).toBeNull();
+    expect(oneOnOne).toHaveAccessibleDescription("Choose one and the calendar will open below.");
+  });
+
+  it.each([[ONE_ON_ONE], [PARTNER]])("opens the calendar below once a type is chosen (%s)", async (name) => {
+    render(<BookPage />);
+    await chooseType(name);
+    const group = screen.getByRole("group", { name: /kind of session/i });
     const calendar = screen.getByRole("table");
     expect(group.compareDocumentPosition(calendar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /available$/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Choose one and the calendar will open below.")).toBeNull();
+  });
+
+  it("keeps the picked time and details when the type is changed afterwards", async () => {
+    render(<BookPage />);
+    const time = await pickTime();
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Pat Example" } });
+    fireEvent.change(screen.getByLabelText("Your email address"), { target: { value: "pat@example.com" } });
+    await chooseType(PARTNER);
+
+    expect(screen.getByLabelText("Your name")).toHaveValue("Pat Example");
+    expect(document.querySelector(".booking-chosen")).toHaveTextContent(time);
+    await sendRequest();
+    expect(submitBooking).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "partner" }));
   });
 
   it.each([
@@ -137,29 +161,6 @@ describe("choosing a session type", () => {
     expect(submitBooking).toHaveBeenCalledWith(expect.objectContaining({ sessionType: id }));
   });
 
-  it("when none is chosen, says so on the group, moves focus there, and keeps the time and details", async () => {
-    render(<BookPage />);
-    const time = await pickTimeOnly();
-    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Pat Example" } });
-    fireEvent.change(screen.getByLabelText("Your email address"), { target: { value: "pat@example.com" } });
-    fireEvent.submit(screen.getByRole("button", { name: "Request this session" }).closest("form")!);
-
-    const group = screen.getByRole("group", { name: /kind of session/i });
-    expect(within(group).getByText("Please choose 1-on-1 or partner training.")).toBeInTheDocument();
-    const first = within(group).getByRole("radio", { name: ONE_ON_ONE });
-    await waitFor(() => expect(first).toHaveFocus());
-    expect(first).toHaveAccessibleDescription("Please choose 1-on-1 or partner training.");
-    expect(submitBooking).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Your name")).toHaveValue("Pat Example");
-    expect(screen.getByLabelText("Your email address")).toHaveValue("pat@example.com");
-    expect(document.querySelector(".booking-chosen")).toHaveTextContent(time);
-
-    // Choosing one clears the message, and the request goes through.
-    fireEvent.click(within(group).getByRole("radio", { name: PARTNER }));
-    expect(screen.queryByText("Please choose 1-on-1 or partner training.")).toBeNull();
-    await sendRequest();
-    expect(submitBooking).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "partner" }));
-  });
 });
 
 describe("booking another session in the same visit", () => {
@@ -183,6 +184,7 @@ describe("booking another session in the same visit", () => {
     const first = await bookFirstVisit(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Book another session" }));
+    await chooseType();
     fireEvent.click((await screen.findAllByRole("button", { name: /available$/ }))[0]);
     const offered = [...document.querySelectorAll(".slot-row")].map((b) => b.textContent);
     expect(offered).not.toContain(first);
@@ -245,7 +247,7 @@ describe("booking another session in the same visit", () => {
 
   it("does not move focus when the page first opens", async () => {
     render(<BookPage />);
-    await screen.findAllByRole("button", { name: /available$/ });
+    await screen.findByRole("group", { name: /kind of session/i });
     expect(document.body).toHaveFocus();
   });
 });

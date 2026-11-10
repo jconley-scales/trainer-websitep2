@@ -1349,10 +1349,6 @@ button.slot-row.is-selected:hover:not(:disabled) {
   min-width: 0;
 }
 
-.session-type .error-message {
-  margin-bottom: var(--space);
-}
-
 .session-type-options {
   display: flex;
   flex-direction: column;

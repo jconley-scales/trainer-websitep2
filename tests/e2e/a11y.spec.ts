@@ -451,29 +451,35 @@ test.describe("public 404", () => {
   });
 });
 
-/** Opens /book and waits for the calendar's open days (worked out after load). */
-async function openBookingCalendar(page: Page) {
-  await page.goto("/book");
-  await expect(page.getByRole("heading", { level: 1, name: "Book a session" })).toBeVisible();
-  const days = page.locator("button.booking-day--open");
-  await expect(days.first()).toBeVisible();
-  return days;
-}
-
 const SESSION_TYPE_LABEL = { "one-on-one": /^1-on-1 training/, partner: /^Partner training/ } as const;
 
 /** The "What kind of session" radio group at the top of /book. */
 const sessionTypeGroup = (page: Page) => page.getByRole("group", { name: "What kind of session would you like?" });
 
+/** Opens /book and waits for the session type question (shown after load). */
+async function openBookPage(page: Page) {
+  await page.goto("/book");
+  await expect(page.getByRole("heading", { level: 1, name: "Book a session" })).toBeVisible();
+  await expect(sessionTypeGroup(page)).toBeVisible();
+}
+
+/** Opens /book and chooses a session type, which opens the calendar; returns its open days. */
+async function openBookingCalendar(page: Page, type: keyof typeof SESSION_TYPE_LABEL = "one-on-one") {
+  await openBookPage(page);
+  await sessionTypeGroup(page).getByRole("radio", { name: SESSION_TYPE_LABEL[type] }).check();
+  const days = page.locator("button.booking-day--open");
+  await expect(days.first()).toBeVisible();
+  return days;
+}
+
 /**
- * Chooses a session type (unless `type` is null), then picks the first open
- * day and its first time, so the details form shows. Returns the chosen slot's
- * real start and end, matched by the labels the page shows (so a test can
- * take that exact time in the meantime).
+ * Chooses a session type, then picks the first open day and its first time,
+ * so the details form shows. Returns the chosen slot's real start and end,
+ * matched by the labels the page shows (so a test can take that exact time
+ * in the meantime).
  */
-async function pickFirstTime(page: Page, type: keyof typeof SESSION_TYPE_LABEL | null = "one-on-one") {
-  const days = await openBookingCalendar(page);
-  if (type) await sessionTypeGroup(page).getByRole("radio", { name: SESSION_TYPE_LABEL[type] }).check();
+async function pickFirstTime(page: Page, type: keyof typeof SESSION_TYPE_LABEL = "one-on-one") {
+  const days = await openBookingCalendar(page, type);
   const dayLabel = (await days.first().getAttribute("aria-label"))!;
   await days.first().click();
   const time = page.locator(".booking-times").getByRole("button").first();
@@ -603,17 +609,19 @@ test.describe("/book (booking calendar)", () => {
     await expect(page.getByRole("form", { name: "Your details" }).getByLabel("Your name")).toHaveValue("");
   });
 
-  test("session type: asked first, neither chosen; axe, keyboard, 48px targets, focus", async ({ page }) => {
-    await openBookingCalendar(page);
+  test("session type: asked first, neither chosen, calendar closed until one is; axe, keyboard, 48px targets, focus", async ({ page }) => {
+    await openBookPage(page);
     const group = sessionTypeGroup(page);
     const radios = group.getByRole("radio");
     await expect(radios).toHaveCount(2);
     for (const radio of await radios.all()) await expect(radio).not.toBeChecked();
     await expect(group.getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
-    // Above the calendar.
-    const groupBox = (await group.boundingBox())!;
-    const calendarBox = (await page.getByRole("table").boundingBox())!;
-    expect(groupBox.y + groupBox.height).toBeLessThanOrEqual(calendarBox.y);
+    // The calendar stays closed, and a hint says how to open it.
+    await expect(page.getByRole("table")).toHaveCount(0);
+    const hint = group.getByText("Choose one and the calendar will open below.");
+    await expect(hint).toBeVisible();
+    await expect(radios.first()).toHaveAccessibleDescription("Choose one and the calendar will open below.");
+    expect(await contrastRatio(hint), "session type hint").toBeGreaterThanOrEqual(4.5);
     // Each option card is the tap target.
     for (const option of await page.locator(".session-type-option").all()) {
       expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(48);
@@ -621,6 +629,13 @@ test.describe("/book (booking calendar)", () => {
     }
     await expectNoSeriousViolations(page, "/book (session type)");
     await expectKeyboardAndTargets(page, "/book (session type)");
+
+    // Choosing one opens the calendar below the question.
+    await radios.first().check();
+    await expect(hint).toHaveCount(0);
+    const groupBox = (await group.boundingBox())!;
+    const calendarBox = (await page.getByRole("table").boundingBox())!;
+    expect(groupBox.y + groupBox.height).toBeLessThanOrEqual(calendarBox.y);
   });
 
   for (const type of ["one-on-one", "partner"] as const) {
@@ -644,32 +659,6 @@ test.describe("/book (booking calendar)", () => {
       expect(await res.json()).toEqual([{ session_type: type }]);
     });
   }
-
-  test("no session type chosen: message on the group, focus moves there, input kept; axe, keyboard, 48px targets", async ({ page }) => {
-    await pickFirstTime(page, null);
-    const form = page.getByRole("form", { name: "Your details" });
-    const chosen = await page.locator(".booking-chosen").textContent();
-    await form.getByLabel("Your name").fill("Pat Example");
-    await form.getByLabel("Your email address").fill(testEmail());
-    await form.getByRole("button", { name: "Request this session" }).click();
-
-    const group = sessionTypeGroup(page);
-    await expect(group.getByText("Please choose 1-on-1 or partner training.")).toBeVisible();
-    const first = group.getByRole("radio", { name: SESSION_TYPE_LABEL["one-on-one"] });
-    await expect(first).toBeFocused();
-    await expect(first).toHaveAccessibleDescription("Please choose 1-on-1 or partner training.");
-    await expect(form.getByLabel("Your name")).toHaveValue("Pat Example");
-    await expect(page.locator(".booking-chosen")).toHaveText(chosen!);
-    expect(await contrastRatio(group.locator(".error-message")), "session type error").toBeGreaterThanOrEqual(4.5);
-    await expectNoSeriousViolations(page, "/book (no session type)");
-    await expectKeyboardAndTargets(page, "/book (no session type)");
-
-    // Choosing one clears the message; the request then goes through.
-    await first.check();
-    await expect(group.getByText("Please choose 1-on-1 or partner training.")).toHaveCount(0);
-    await form.getByRole("button", { name: "Request this session" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Thank you — your request is in" })).toBeVisible();
-  });
 
   test("a time taken in the meantime (alert): axe, keyboard, 48px targets, focus", async ({ page, request }) => {
     const slot = await pickFirstTime(page);
