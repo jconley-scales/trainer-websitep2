@@ -79,27 +79,27 @@ export const SITE = {
   /** Clients' own words, exactly as published on the original site. The first is the home-page preview. */
   testimonials: [
     {
-      name: "Hank Prensky",
+      name: "Hank P.",
       quote: [
         "Jervaughn Scales is a great trainer, a professionally talented athlete, and a coach devoted to making me stronger, more flexible and (significantly for us “older adults”) capable of better balance! He’s the best!",
       ],
     },
     {
-      name: "Elaine Kolitch",
+      name: "Elaine K.",
       quote: [
         "I am pleased to write a testimonial about my experiences with Jervaughn as my personal trainer. Jervaughn and I have been training together twice a week in my home for the past 9 months. I am 83 years old and when we began I hadn’t exercised for quite some time because of various health issues; so I was weak, with poor balance and flexibility. Overall, I’m in much better shape now, definitely stronger and able to function better physically in my daily life. I attribute these changes to all the exercises, (using weights, bands and ropes) that I did with Jervaughn during the past year.",
         "Jervaughn is extremely knowledgeable about anatomy and the exercises needed to strengthen various parts of your body. He is highly professional to work with and is especially encouraging about your ability to improve and progress, regardless of your age. He is reliable and pleasant and makes the training a very positive experience. I look forward to our sessions, and plan to continue them in the future.",
       ],
     },
     {
-      name: "Gretchen Rigol",
+      name: "Gretchen R.",
       quote: [
         "In 2021, I joined the Greater Burlington YMCA in hopes of regaining some physical fitness lost during the pandemic and other distractions. I thought some lessons about how to use the exercise equipment would be helpful, so I signed up for Personal Training. To my surprise, I was assigned to Jervaughn Scales, a former professional basketball player! I thought that was a gigantic mistake and that somebody had misread my background questionnaire (75-year-old female not in very good shape)—but I bravely decided to go through with the introductory session. That was one of the best decisions I’ve ever made.",
         "Since then, I’ve worked with Jervaughn on a regular basis. He really had to begin with very basic skills, but he persevered and so did I. A personal training session with Jervaughn is hard work, but fortunately also usually fun. Jervaughn is highly professional, really knows how to get his clients to improve, and—on top of all of his professional qualifications—is trustworthy and a good person.",
       ],
     },
     {
-      name: "Tom Maffitt",
+      name: "Tom M.",
       quote: [
         "For the past three years, I have had the pleasure of working with Jervaughn as my personal trainer. Throughout this time, Jervaughn has consistently demonstrated an exceptional level of knowledge and skill in the field of fitness and personal training. From the very beginning, Jervaughn took the time to understand my specific goals and tailor a fitness routine that was not only effective but also safe. Each session was thoughtfully designed to challenge me while ensuring that I performed exercises with the correct form, thus minimizing the risk of injury.",
         "What sets Jervaughn apart is his ability to adapt and modify routines as my fitness level and goals evolved. His expertise in creating a balanced and comprehensive training program has been instrumental in helping me achieve significant progress over the years. Beyond his technical skills, Jervaughn is incredibly supportive and motivating. He has an innate ability to push me past my perceived limits while maintaining a positive and encouraging atmosphere. His dedication to my success is evident in every session, and I always leave feeling accomplished and motivated.",
