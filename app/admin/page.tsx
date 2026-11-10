@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { firstName, formatDate, formatDayMonthTime, formatTimeRange } from "@/lib/format";
+import { sessionTypeTag, toSessionType, type SessionType } from "@/lib/session-types";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import { AddBookingForm } from "./add-booking-form";
@@ -26,6 +27,8 @@ type Booking = {
   source: "website" | "admin";
   /** When its details or time were last edited at /admin; null if never. */
   updated_at: string | null;
+  /** "one-on-one" or "partner"; null for bookings made before it was recorded. */
+  session_type: SessionType | null;
 };
 
 const STATUS_LABEL: Record<Booking["status"], string> = {
@@ -130,14 +133,16 @@ async function loadBookings(
 ): Promise<{ upcoming: Booking[]; past: Booking[]; now: number } | null> {
   const { data, error } = await db
     .from("booking_requests")
-    .select("id, name, email, phone, note, starts_at, ends_at, status, created_at, source, updated_at")
+    .select("id, name, email, phone, note, starts_at, ends_at, status, created_at, source, updated_at, session_type")
     .order("starts_at", { ascending: true })
     .overrideTypes<Booking[], { merge: false }>();
   if (error) return null;
   const now = Date.now();
+  // Narrowed once here, so a stray stored value can never reach the page as a tag.
+  const bookings = data.map((b) => ({ ...b, session_type: toSessionType(b.session_type) }));
   return {
-    upcoming: data.filter((b) => Date.parse(b.ends_at) >= now),
-    past: data.filter((b) => Date.parse(b.ends_at) < now).reverse(),
+    upcoming: bookings.filter((b) => Date.parse(b.ends_at) >= now),
+    past: bookings.filter((b) => Date.parse(b.ends_at) < now).reverse(),
     now,
   };
 }
@@ -167,7 +172,15 @@ function BookingCards({
             </div>
             <div>
               <dt>Name</dt>
-              <dd>{b.name}</dd>
+              <dd>
+                {b.name}
+                {b.session_type ? (
+                  <>
+                    {" "}
+                    <span className="source-tag session-type-tag">{sessionTypeTag(b.session_type)}</span>
+                  </>
+                ) : null}
+              </dd>
             </div>
             <div>
               <dt>Email</dt>

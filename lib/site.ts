@@ -113,7 +113,7 @@ export const SITE = {
    * and `updated`.
    */
   privacy: {
-    updated: "November 9, 2026",
+    updated: "November 10, 2026",
     /** Shown beside the booking and contact forms, linking here. */
     linkLabel: "How we use your details",
     lead: "What happens to the details you send me, in plain English.",
@@ -125,7 +125,7 @@ export const SITE = {
           "I only collect what you choose to send me through this website, apart from the basic visit logs every web host keeps (such as your device’s internet address):",
         ],
         items: [
-          "When you request a session: your name, email address, phone number if you give one, the time you picked, and any note you add.",
+          "When you request a session: your name, email address, phone number if you give one, the kind of session you chose, the time you picked, and any note you add.",
           "When you send a message: your name, email address, phone number if you give one, and your message.",
         ],
         afterList: [

@@ -40,6 +40,7 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   `booking-fields.tsx` with the add form
 - `proxy.ts` — Next 16's renamed middleware; gates `/admin` only
 - `lib/site.ts` — ALL site copy (name, trainer, services, prices, testimonials)
+- `lib/session-types.ts` — session types (1-on-1, Partner): ids, labels, tags
 - `lib/booking-availability.ts` — bookable slots (generated, not from the DB)
 - `lib/format.ts` — `DISPLAY_TIME_ZONE` and date/time formatting
 - `lib/supabase/public.ts` — anon client (insert-only); `server.ts` — session client
@@ -71,6 +72,18 @@ in the Supabase mail viewer at http://127.0.0.1:54324.
   bookings (RLS via `is_admin()`); they skip the slot schedule, are saved as
   confirmed, and are exempt from the per-email cap. See
   `docs/adr/0001-admin-bookings.md` and `GLOSSARY.md`.
+- Every website request records a `session_type`, `'one-on-one'` or `'partner'`
+  (migration `0011`; text plus a check, no enum). The ids and labels live in
+  `lib/session-types.ts`, which form, action, emails and /admin all import;
+  `SITE.pricing` keeps its own copy and a unit test checks they agree. The
+  column is nullable: older rows have no type (not backfilled) and admin
+  bookings may leave it out. The public insert policy requires it, and so does
+  `submitBooking`, which rejects a missing or unknown value. (The column's
+  check only limits the values; "required for website requests" is not a
+  check, since that would also block updating older untyped rows.)
+  Scheduling ignores it: same slots, same index, same per-email cap. The admin
+  card shows a "1-on-1"/"Partner" tag; the trainer's new-booking email and the
+  Confirmed email add a "Session:" line, left out when there is no type.
 - Taken times come from the `taken_booking_times()` SECURITY DEFINER function,
   which returns each live booking's start and end only, never who booked
   (migration `0009`). The calendar hides every slot a booking overlaps, and

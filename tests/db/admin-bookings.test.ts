@@ -130,10 +130,10 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
   it("still rejects a website booking with no email, even from the trainer", async () => {
     const { error: fromVisitor } = await anon
       .from("booking_requests")
-      .insert({ name: `Pat ${MARK}`, ...freeTime() });
+      .insert({ name: `Pat ${MARK}`, ...freeTime(), session_type: "one-on-one" });
     const { error: fromTrainer } = await trainer.db
       .from("booking_requests")
-      .insert({ name: `Pat ${MARK}`, ...freeTime(), source: "website" });
+      .insert({ name: `Pat ${MARK}`, ...freeTime(), source: "website", session_type: "one-on-one" });
 
     expect(fromVisitor?.code).toBe("23514");
     expect(fromTrainer?.code).toBe("23514");
@@ -143,7 +143,7 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     const time = freeTime();
     const { error } = await anon
       .from("booking_requests")
-      .insert({ name: `Pat ${MARK}`, email: clientEmail("visitor"), ...time });
+      .insert({ name: `Pat ${MARK}`, email: clientEmail("visitor"), ...time, session_type: "one-on-one" });
     expect(error).toBeNull();
 
     const { data } = await service.from("booking_requests").select("source, status").eq("starts_at", time.starts_at);
@@ -185,16 +185,16 @@ describe.skipIf(!running)("admin bookings (local Supabase)", () => {
     }
 
     for (let i = 0; i < 3; i++) {
-      const { error } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime() });
+      const { error } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime(), session_type: "one-on-one" });
       expect(error).toBeNull();
     }
-    const { error: fourth } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime() });
+    const { error: fourth } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime(), session_type: "one-on-one" });
     expect(fourth?.code).toBe("PF001");
   });
 
   it("blocks an admin booking at the exact start time of a live booking", async () => {
     const time = freeTime();
-    await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: clientEmail("first"), ...time });
+    await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: clientEmail("first"), ...time, session_type: "one-on-one" });
 
     const { error } = await trainer.db
       .from("booking_requests")
@@ -311,7 +311,7 @@ describe.skipIf(!running)("editing bookings (local Supabase)", () => {
   it("does not let the per-email cap block correcting an email onto a client who already has three requests", async () => {
     const who = clientEmail("regular");
     for (let i = 0; i < 3; i++) {
-      const { error } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime() });
+      const { error } = await anon.from("booking_requests").insert({ name: `Pat ${MARK}`, email: who, ...freeTime(), session_type: "one-on-one" });
       expect(error).toBeNull();
     }
     const id = await websiteBooking();

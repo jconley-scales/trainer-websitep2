@@ -8,6 +8,7 @@ import {
   formatTimeRange,
   formatTimeZoneName,
 } from "@/lib/format";
+import { sessionTypeTitle, type SessionType } from "@/lib/session-types";
 import { SITE } from "@/lib/site";
 
 /** Visitor input goes into a header; strip line breaks so it stays one line. */
@@ -43,6 +44,10 @@ const sessionLines = (startsAt: string, endsAt: string) => [
   `    ${formatTimeRange(startsAt, endsAt)} (${formatTimeZoneName(startsAt)})`,
 ];
 
+/** "Session: Partner training" with the given indent, or nothing for a booking with no type recorded. */
+const sessionTypeLine = (indent: string, sessionType: SessionType | null) =>
+  sessionType ? [`${indent}Session: ${sessionTypeTitle(sessionType)}`] : [];
+
 /** The trainer's optional words under the given heading, or nothing when blank. */
 const trainerNote = (heading: string, note: string) => {
   const trimmed = note.trim();
@@ -67,6 +72,8 @@ export type NewBooking = {
   note: string | null;
   startsAt: string;
   endsAt: string;
+  /** Null for bookings made before session types were recorded. */
+  sessionType: SessionType | null;
 };
 
 /**
@@ -96,6 +103,7 @@ export async function notifyTrainerOfBooking(booking: NewBooking): Promise<void>
     `New booking request for ${SITE.name}.`,
     "",
     `When:  ${when}`,
+    ...sessionTypeLine("", booking.sessionType),
     `Name:  ${booking.name}`,
     `Email: ${booking.email}`,
     `Phone: ${booking.phone ?? "(not given)"}`,
@@ -164,6 +172,8 @@ export type BookingConfirmation = {
   endsAt: string;
   /** Optional words from the trainer (e.g. where to meet). Only ever emailed. */
   note: string;
+  /** Named under the time when given; left out for bookings with no type recorded. */
+  sessionType: SessionType | null;
 };
 
 /**
@@ -183,6 +193,7 @@ export async function sendBookingConfirmation(booking: BookingConfirmation): Pro
     "Your session is confirmed.",
     "",
     ...sessionLines(booking.startsAt, booking.endsAt),
+    ...sessionTypeLine("    ", booking.sessionType),
     "",
     ...trainerNote(`A note from ${SITE.trainerFirstName}:`, booking.note),
     "If you need to change or cancel, just reply to this email.",

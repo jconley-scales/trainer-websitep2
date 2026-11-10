@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import { availabilityWindow, availableDays, overlapsTaken, type TakenTime } from "@/lib/booking-availability";
 import { notifyTrainerOfBooking } from "@/lib/notify";
+import { isSessionType, SESSION_TYPE_REQUIRED, type SessionType } from "@/lib/session-types";
 import { SITE } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -29,6 +30,8 @@ export type BookingInput = {
   note: string;
   startsAt: string;
   endsAt: string;
+  /** 1-on-1 or Partner. Required; null only before the visitor has chosen. */
+  sessionType: SessionType | null;
   /** Bot trap: hidden from people, so only bots fill it in. */
   website?: string;
 };
@@ -74,7 +77,11 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
   const email = (input.email ?? "").trim().toLowerCase();
   const phone = (input.phone ?? "").trim();
   const note = (input.note ?? "").trim();
+  const sessionType = input.sessionType;
 
+  if (!isSessionType(sessionType)) {
+    return { ok: false, error: SESSION_TYPE_REQUIRED };
+  }
   if (!name || name.length > 120) {
     return { ok: false, error: "Please enter your name." };
   }
@@ -116,6 +123,7 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
     note: note || null,
     starts_at: slot.startsAt,
     ends_at: slot.endsAt,
+    session_type: sessionType,
   });
   if (error) {
     if (error.code === UNIQUE_VIOLATION) return justTaken;
@@ -143,6 +151,7 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
         note: note || null,
         startsAt: slot.startsAt,
         endsAt: slot.endsAt,
+        sessionType,
       });
     } catch (err) {
       console.error("Booking saved, but the notification email failed:", err);

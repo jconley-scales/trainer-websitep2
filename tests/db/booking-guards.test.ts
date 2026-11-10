@@ -49,7 +49,16 @@ async function freeSlots(count: number): Promise<AvailableSlot[]> {
 }
 
 function booking(slot: AvailableSlot, who: string, extra: { website?: string } = {}) {
-  return { name: "Pat Example", email: who, phone: "", note: "", startsAt: slot.startsAt, endsAt: slot.endsAt, ...extra };
+  return {
+    name: "Pat Example",
+    email: who,
+    phone: "",
+    note: "",
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    sessionType: "one-on-one" as const,
+    ...extra,
+  };
 }
 
 async function isTaken(slot: AvailableSlot) {
@@ -89,6 +98,7 @@ describe.skipIf(!running)("booking spam guards (local Supabase)", () => {
       email: ` ${who.toUpperCase()} `,
       starts_at: slots[3].startsAt,
       ends_at: slots[3].endsAt,
+      session_type: "partner",
     });
 
     expect(error?.code).toBe("PF001");

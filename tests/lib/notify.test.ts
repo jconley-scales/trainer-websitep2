@@ -19,6 +19,7 @@ const BOOKING = {
   email: "jordan@example.com",
   startsAt: "2030-10-25T13:00:00Z",
   endsAt: "2030-10-25T14:00:00Z",
+  sessionType: null,
 };
 
 beforeEach(() => {
@@ -84,6 +85,26 @@ describe("sendBookingConfirmation", () => {
         "If you need to change or cancel, just reply to this email.",
       ].join("\n"),
     );
+  });
+
+  it("names the session type with the day and time, when the booking has one", async () => {
+    await sendBookingConfirmation({ ...BOOKING, note: "", sessionType: "partner" });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe("Confirmed: Friday, October 25 at 9:00 AM");
+    expect(mail.text).toContain(
+      [
+        "    Friday, October 25",
+        "    9:00 AM to 10:00 AM (Eastern time)",
+        "    Session: Partner training",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("leaves the session line out for a booking with no type recorded", async () => {
+    await sendBookingConfirmation({ ...BOOKING, note: "", sessionType: null });
+    expect(sendMail.mock.calls[0][0].text).not.toContain("Session:");
   });
 
   it("throws when email is not configured, so the caller can warn the trainer", async () => {
@@ -248,6 +269,16 @@ describe("emails to the trainer (unchanged by the shared mail setup)", () => {
     expect(mail.to).toBe("trainer@example.com");
     expect(mail.from).toBe("Booking <booking@example.com>");
     expect(mail.replyTo).toBe("jordan@example.com");
+  });
+
+  it("names the session type in the new-booking alert, and leaves it out when there is none", async () => {
+    await notifyTrainerOfBooking({ ...BOOKING, phone: null, note: null, sessionType: "one-on-one" });
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.text).toContain("Session: 1-on-1 training\n");
+    expect(mail.subject).toBe("New booking request: Friday, October 25, 2030, 9:00 AM to 10:00 AM — Jordan Tester");
+
+    await notifyTrainerOfBooking({ ...BOOKING, phone: null, note: null, sessionType: null });
+    expect(sendMail.mock.calls[1][0].text).not.toContain("Session:");
   });
 
   it("sends contact messages to the trainer, and refuses when the trainer's address is not set", async () => {

@@ -5,7 +5,7 @@ A one-to-one personal trainer's booking system: visitors request sessions from t
 ## Language
 
 **Booking**:
-One session at a set time with one client, whether requested on the website or added by the trainer.
+One session at a set time, booked by one client, whether requested on the website or added by the trainer. A partner session is still one booking.
 _Avoid_: Appointment, slot (a slot is an open time on the public schedule, not a booking)
 
 **Booking request**:
@@ -22,6 +22,10 @@ _Avoid_: Manual booking, phone booking
 **Source**:
 Where a booking came from: the website or the trainer (admin).
 _Avoid_: Origin, channel
+
+**Session type**:
+The kind of session a booking is for: 1-on-1 (the client alone) or Partner (the client and one other person, priced for both). Chosen by the visitor on the website; not recorded for older bookings.
+_Avoid_: Service, pair
 
 **Live booking**:
 A booking that has not been cancelled.

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { PrivacyNote } from "@/components/marketing/PrivacyNote";
 import { getTakenTimes, submitBooking } from "@/app/(marketing)/book/actions";
 import {
@@ -11,6 +12,7 @@ import {
   type TakenTime,
 } from "@/lib/booking-availability";
 import { formatDate, formatTimeRange } from "@/lib/format";
+import { SESSION_TYPE_REQUIRED, SESSION_TYPES, type SessionType } from "@/lib/session-types";
 import { SITE } from "@/lib/site";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -73,6 +75,10 @@ export function BookingCalendar({
   const [email, setEmail] = useState(initialDetails?.email ?? "");
   const [phone, setPhone] = useState(initialDetails?.phone ?? "");
   const [note, setNote] = useState("");
+  // Never preselected: the visitor chooses 1-on-1 or partner themselves.
+  const [sessionType, setSessionType] = useState<SessionType | null>(null);
+  const [sessionTypeMissing, setSessionTypeMissing] = useState(false);
+  const firstSessionTypeRef = useRef<HTMLInputElement>(null);
   const [website, setWebsite] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState("");
@@ -83,6 +89,7 @@ export function BookingCalendar({
   const headingId = useId();
   const slotsHeadingId = useId();
   const formHeadingId = useId();
+  const sessionTypeErrorId = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +129,12 @@ export function BookingCalendar({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedSlot) return;
+    if (!sessionType) {
+      // Keep the time and details; send the visitor back up to the choice.
+      setSessionTypeMissing(true);
+      firstSessionTypeRef.current?.focus();
+      return;
+    }
     setStep("submitting");
     setError("");
     setLimitReached(false);
@@ -133,6 +146,7 @@ export function BookingCalendar({
       website,
       startsAt: selectedSlot.startsAt,
       endsAt: selectedSlot.endsAt,
+      sessionType,
     });
     if (result.ok) {
       onBooked(selectedSlot, { name, email, phone });
@@ -159,7 +173,43 @@ export function BookingCalendar({
         </p>
       ) : null}
 
-      {/* Step 1: pick a day */}
+      {/* Step 1: choose the kind of session */}
+      <fieldset className="session-type">
+        <legend className="section-title">What kind of session would you like?</legend>
+        {sessionTypeMissing ? (
+          <p id={sessionTypeErrorId} className="error-message">
+            {SESSION_TYPE_REQUIRED}
+          </p>
+        ) : null}
+        <div className="session-type-options">
+          {SESSION_TYPES.map((type, i) => (
+            <label key={type.id} className="session-type-option">
+              <input
+                ref={i === 0 ? firstSessionTypeRef : undefined}
+                type="radio"
+                name="session-type"
+                value={type.id}
+                checked={sessionType === type.id}
+                required
+                aria-describedby={sessionTypeMissing ? sessionTypeErrorId : undefined}
+                onChange={() => {
+                  setSessionType(type.id);
+                  setSessionTypeMissing(false);
+                }}
+              />
+              <span className="session-type-text">
+                <span className="session-type-title">{type.title}</span>{" "}
+                <span className="session-type-intro">{type.intro}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className="session-type-pricing">
+          <Link href="/pricing">See pricing</Link>
+        </p>
+      </fieldset>
+
+      {/* Step 2: pick a day */}
       <div className="booking-calendar">
         <div className="booking-month-bar">
           <button
@@ -240,7 +290,7 @@ export function BookingCalendar({
         <p className="booking-hint">Days with an open session are shown in colour. Pick one to see its times.</p>
       </div>
 
-      {/* Step 2: pick a time */}
+      {/* Step 3: pick a time */}
       {selectedDate && daySlots.length > 0 ? (
         <div className="booking-times" aria-labelledby={slotsHeadingId}>
           <h2 id={slotsHeadingId} className="section-title">
@@ -267,7 +317,7 @@ export function BookingCalendar({
         </div>
       ) : null}
 
-      {/* Step 3: your details */}
+      {/* Step 4: your details */}
       {selectedSlot ? (
         <form className="booking-form" onSubmit={handleSubmit} aria-labelledby={formHeadingId}>
           <h2 id={formHeadingId} className="section-title">

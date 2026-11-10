@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import BookPage from "@/app/(marketing)/book/page";
+import { submitBooking } from "@/app/(marketing)/book/actions";
 import { SITE } from "@/lib/site";
 
 vi.mock("@/app/(marketing)/book/actions", () => ({
@@ -8,15 +9,32 @@ vi.mock("@/app/(marketing)/book/actions", () => ({
   submitBooking: vi.fn(async () => ({ ok: true })),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.mocked(submitBooking).mockClear();
+});
+
+const ONE_ON_ONE = /^1-on-1 training/;
+const PARTNER = /^Partner training/;
+
+/** Chooses 1-on-1 or partner training. */
+async function chooseType(name: RegExp = ONE_ON_ONE) {
+  fireEvent.click(await screen.findByRole("radio", { name }));
+}
 
 /** Picks the first open day and its time number `timeIndex`; returns that time's label. */
-async function pickTime(timeIndex = 0): Promise<string> {
+async function pickTimeOnly(timeIndex = 0): Promise<string> {
   fireEvent.click((await screen.findAllByRole("button", { name: /available$/ }))[0]);
   const time = document.querySelectorAll<HTMLButtonElement>(".slot-row")[timeIndex];
   const label = time.textContent!;
   fireEvent.click(time);
   return label;
+}
+
+/** Chooses 1-on-1 training, then picks a time as `pickTimeOnly` does. */
+async function pickTime(timeIndex = 0): Promise<string> {
+  await chooseType();
+  return pickTimeOnly(timeIndex);
 }
 
 /** Sends the open details form and waits for the thank-you. */
@@ -60,6 +78,7 @@ describe("booking a session", () => {
   it("replaces the whole booking page with the thank-you once the request is in", async () => {
     render(<BookPage />);
 
+    await chooseType();
     const openDay = (await screen.findAllByRole("button", { name: /available$/ }))[0];
     fireEvent.click(openDay);
     const firstTime = document.querySelector<HTMLButtonElement>(".slot-row")!;
@@ -83,6 +102,63 @@ describe("booking a session", () => {
     expect(screen.queryByRole("link", { name: "See pricing" })).toBeNull();
     expect(document.querySelector(".booking-calendar, .booking-form")).toBeNull();
     await waitFor(() => expect(document.title).toBe(`Request received | ${SITE.name}`));
+  });
+});
+
+describe("choosing a session type", () => {
+  it("asks first, above the calendar, with neither 1-on-1 nor partner chosen yet", async () => {
+    render(<BookPage />);
+    const group = await screen.findByRole("group", { name: /kind of session/i });
+    const oneOnOne = within(group).getByRole("radio", { name: ONE_ON_ONE });
+    const partner = within(group).getByRole("radio", { name: PARTNER });
+
+    expect(oneOnOne).toHaveAccessibleName("1-on-1 training Just you and your trainer.");
+    expect(partner).toHaveAccessibleName("Partner training Train with a partner. Prices cover both of you.");
+    expect(oneOnOne).not.toBeChecked();
+    expect(partner).not.toBeChecked();
+    expect(within(group).getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "/pricing");
+    expect(group).not.toHaveTextContent("$");
+
+    const calendar = screen.getByRole("table");
+    expect(group.compareDocumentPosition(calendar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([
+    [ONE_ON_ONE, "one-on-one"],
+    [PARTNER, "partner"],
+  ] as const)("sends the chosen type with the request (%s)", async (name, id) => {
+    render(<BookPage />);
+    await chooseType(name);
+    await pickTimeOnly();
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Pat Example" } });
+    fireEvent.change(screen.getByLabelText("Your email address"), { target: { value: "pat@example.com" } });
+    await sendRequest();
+
+    expect(submitBooking).toHaveBeenCalledWith(expect.objectContaining({ sessionType: id }));
+  });
+
+  it("when none is chosen, says so on the group, moves focus there, and keeps the time and details", async () => {
+    render(<BookPage />);
+    const time = await pickTimeOnly();
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Pat Example" } });
+    fireEvent.change(screen.getByLabelText("Your email address"), { target: { value: "pat@example.com" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Request this session" }).closest("form")!);
+
+    const group = screen.getByRole("group", { name: /kind of session/i });
+    expect(within(group).getByText("Please choose 1-on-1 or partner training.")).toBeInTheDocument();
+    const first = within(group).getByRole("radio", { name: ONE_ON_ONE });
+    await waitFor(() => expect(first).toHaveFocus());
+    expect(first).toHaveAccessibleDescription("Please choose 1-on-1 or partner training.");
+    expect(submitBooking).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Your name")).toHaveValue("Pat Example");
+    expect(screen.getByLabelText("Your email address")).toHaveValue("pat@example.com");
+    expect(document.querySelector(".booking-chosen")).toHaveTextContent(time);
+
+    // Choosing one clears the message, and the request goes through.
+    fireEvent.click(within(group).getByRole("radio", { name: PARTNER }));
+    expect(screen.queryByText("Please choose 1-on-1 or partner training.")).toBeNull();
+    await sendRequest();
+    expect(submitBooking).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "partner" }));
   });
 });
 

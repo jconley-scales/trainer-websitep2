@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { gymTimeToUtc } from "@/lib/booking-availability";
 import { firstName, formatTime } from "@/lib/format";
 import { sendBookingCancellation, sendBookingConfirmation, sendBookingMoved } from "@/lib/notify";
+import { toSessionType } from "@/lib/session-types";
 import { createClient } from "@/lib/supabase/server";
 import {
   BOOKING_EMAIL_MAX,
@@ -146,7 +147,7 @@ export async function confirmBooking(id: string, note: string, skipEmail = false
     .update({ status: "confirmed" })
     .eq("id", id)
     .eq("status", "new")
-    .select("name, email, starts_at, ends_at");
+    .select("name, email, starts_at, ends_at, session_type");
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
       return { ok: false, error: "Another booking already holds this time, so this one cannot be confirmed." };
@@ -167,6 +168,7 @@ export async function confirmBooking(id: string, note: string, skipEmail = false
       startsAt: booking.starts_at,
       endsAt: booking.ends_at,
       note: trimmedNote,
+      sessionType: toSessionType(booking.session_type),
     });
   } catch (err) {
     console.error("Booking confirmation email could not be sent:", err);
@@ -413,7 +415,7 @@ export async function addBooking(input: AddBookingInput): Promise<AddBookingResu
 
   if (!email) return { ok: true, emailed: null };
   try {
-    await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "" });
+    await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "", sessionType: null });
   } catch (err) {
     console.error("Booking confirmation email could not be sent:", err);
     return { ok: true, emailed: false };
@@ -474,12 +476,19 @@ export async function editBooking(input: EditBookingInput): Promise<EditBookingR
 
   const { data: rows, error: readError } = await supabase
     .from("booking_requests")
-    .select("status, source, email, starts_at, ends_at")
+    .select("status, source, email, starts_at, ends_at, session_type")
     .eq("id", input.id)
     .in("status", ["new", "confirmed"]);
   if (readError) return failed;
   const current = rows?.[0] as
-    | { status: "new" | "confirmed"; source: "website" | "admin"; email: string | null; starts_at: string; ends_at: string }
+    | {
+        status: "new" | "confirmed";
+        source: "website" | "admin";
+        email: string | null;
+        starts_at: string;
+        ends_at: string;
+        session_type: string | null;
+      }
     | undefined;
   if (!current) return notChanged;
   const started = fail("This session has already started, so it can't be changed.");
@@ -523,7 +532,8 @@ export async function editBooking(input: EditBookingInput): Promise<EditBookingR
   if (!moved || !email || input.skipEmail === true) return { ...done, emailed: null };
   try {
     if (confirmed) {
-      await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "" });
+      const sessionType = toSessionType(current.session_type);
+      await sendBookingConfirmation({ name, email, startsAt, endsAt, note: "", sessionType });
     } else {
       await sendBookingMoved({ name, email, oldStartsAt: current.starts_at, startsAt, endsAt });
     }

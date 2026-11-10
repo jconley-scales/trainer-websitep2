@@ -80,7 +80,15 @@ describe("confirmBooking", () => {
       startsAt: "2030-10-25T13:00:00Z",
       endsAt: "2030-10-25T14:00:00Z",
       note: "Meet at Oakledge Park.",
+      sessionType: null,
     });
+  });
+
+  it("names the booking's session type in the Confirmed email", async () => {
+    db.result = { data: [{ ...ROW, session_type: "partner" }], error: null };
+    await confirmBooking(ID, "");
+    expect(db.calls).toContainEqual(["select", ["name, email, starts_at, ends_at, session_type"]]);
+    expect(sendBookingConfirmation).toHaveBeenCalledWith(expect.objectContaining({ sessionType: "partner" }));
   });
 
   it("only confirms a new request, so a repeat tap cannot email the client twice", async () => {
@@ -393,6 +401,8 @@ describe("addBooking", () => {
       startsAt: STARTS,
       endsAt: ENDS,
       note: "",
+      // Admin bookings record no session type yet.
+      sessionType: null,
     });
     expect(notifyTrainerOfBooking).not.toHaveBeenCalled();
   });
@@ -587,7 +597,7 @@ describe("editBooking", () => {
   });
 
   it("confirms a new request when it moves, and sends the Confirmed email for the new time instead", async () => {
-    move({ ...CURRENT, status: "new" });
+    move({ ...CURRENT, status: "new", session_type: "one-on-one" });
     const result = await editBooking(MOVED);
 
     expect(result).toEqual({ ok: true, moved: true, confirmed: true, emailed: true });
@@ -598,6 +608,7 @@ describe("editBooking", () => {
       startsAt: NEW_STARTS,
       endsAt: NEW_ENDS,
       note: "",
+      sessionType: "one-on-one",
     });
     expect(sendBookingMoved).not.toHaveBeenCalled();
   });
