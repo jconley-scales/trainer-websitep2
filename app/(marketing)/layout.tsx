@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -12,6 +13,8 @@ export default function MarketingLayout({
       <SiteHeader />
       <main id="main-content">{children}</main>
       <SiteFooter />
+      {/* Public pages only, so the trainer's own /admin visits aren't counted. */}
+      <Analytics />
     </>
   );
 }
